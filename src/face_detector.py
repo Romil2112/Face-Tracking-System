@@ -172,3 +172,41 @@ class FaceDetector:
             verified_face_info = verified_face_info[:max_faces]
             
         return verified_face_info
+    
+    def _verify_face_geometry(self, face_rect):
+        """
+        Verify if the face has reasonable geometric properties.
+        """
+        x, y, w, h = face_rect
+        
+        # Check aspect ratio
+        aspect_ratio = w / h
+        if aspect_ratio < config.FACE_ASPECT_RATIO_MIN or aspect_ratio > config.FACE_ASPECT_RATIO_MAX:
+            return False
+            
+        # Check minimum face size (as percentage of image width)
+        if w < self.min_size[0] or h < self.min_size[1]:
+            return False
+            
+        return True
+
+    # Add this to your face detection process
+    def calculate_confidence(self, face_info, eye_count):
+        """
+        Calculate a confidence score for face detection.
+        """
+        confidence = 0.5  # Base confidence
+        
+        # More eyes = higher confidence
+        if eye_count > 0:
+            confidence += 0.3
+        if eye_count > 1:
+            confidence += 0.1
+            
+        # Good aspect ratio increases confidence
+        x, y, w, h = face_info['rect']
+        aspect_ratio = w / h
+        if config.FACE_ASPECT_RATIO_MIN <= aspect_ratio <= config.FACE_ASPECT_RATIO_MAX:
+            confidence += 0.1
+            
+        return min(confidence, 1.0)
