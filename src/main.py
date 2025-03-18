@@ -37,6 +37,8 @@ def parse_arguments() -> Dict[str, Any]:
     
     return vars(parser.parse_args())
 
+# In the main() function, modify the face detector initialization part:
+
 def main():
     """
     Main function to run the face tracking application.
@@ -52,9 +54,11 @@ def main():
             min_neighbors=args['min_neighbors'],
             min_size=config.MIN_SIZE
         )
-        print(f"Face detector initialized with cascade: {args['cascade']}")
+        print(f"Face detector initialized successfully")
     except Exception as e:
         print(f"Error initializing face detector: {e}")
+        print("Please ensure the Haar cascade XML file exists and is valid")
+        print("You can download it from: https://github.com/opencv/opencv/tree/master/data/haarcascades")
         return
     
     # Initialize video capture
