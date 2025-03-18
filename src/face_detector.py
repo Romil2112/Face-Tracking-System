@@ -4,6 +4,7 @@ Face detection module using Haar Cascades.
 
 import cv2
 import numpy as np
+import os
 from typing import List, Tuple, Dict, Optional
 
 class FaceDetector:
@@ -22,14 +23,53 @@ class FaceDetector:
             min_neighbors: Parameter specifying how many neighbors each candidate rectangle should have
             min_size: Minimum size of the face to detect
         """
-        self.face_cascade = cv2.CascadeClassifier(cascade_path)
+        # Try to use the provided path first
+        self.face_cascade = cv2.CascadeClassifier()
+        
+        # Check if the file exists at the provided path
+        if os.path.isfile(cascade_path):
+            success = self.face_cascade.load(cascade_path)
+            if not success:
+                # If loading fails, try to use the OpenCV built-in path
+                self._load_from_opencv_data()
+        else:
+            # If file doesn't exist, try to use the OpenCV built-in path
+            self._load_from_opencv_data(cascade_path)
+            
+        # Check if cascade loaded successfully
+        if self.face_cascade.empty():
+            raise ValueError(f"Error loading cascade classifier. Could not find a valid cascade file.")
+            
         self.scale_factor = scale_factor
         self.min_neighbors = min_neighbors
         self.min_size = min_size
+    
+    def _load_from_opencv_data(self, filename="haarcascade_frontalface_default.xml"):
+        """
+        Attempts to load the cascade file from OpenCV's data directory.
         
-        # Check if cascade loaded successfully
-        if self.face_cascade.empty():
-            raise ValueError(f"Error loading cascade classifier from {cascade_path}")
+        Args:
+            filename: Name of the cascade file to load
+        """
+        try:
+            # Try using cv2.data.haarcascades path (OpenCV 3.3+)
+            cascade_path = cv2.data.haarcascades + filename
+            if not cascade_path.endswith(".xml"):
+                cascade_path += ".xml"
+            
+            success = self.face_cascade.load(cascade_path)
+            if not success:
+                # If still fails, try with dirname method
+                cascade_path = os.path.join(os.path.dirname(cv2.__file__), 'data', 'haarcascades', filename)
+                if not cascade_path.endswith(".xml"):
+                    cascade_path += ".xml"
+                success = self.face_cascade.load(cascade_path)
+        except AttributeError:
+            # Fallback for older OpenCV versions
+            cascade_path = os.path.join(os.path.dirname(cv2.__file__), 'data', 'haarcascades', filename)
+            if not cascade_path.endswith(".xml"):
+                cascade_path += ".xml"
+            success = self.face_cascade.load(cascade_path)
     
     def detect_faces(self, frame: np.ndarray, max_faces: int = None) -> List[Dict[str, any]]:
         """
@@ -48,6 +88,11 @@ class FaceDetector:
         # Convert to grayscale for face detection
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         
+        # Check if cascade is loaded
+        if self.face_cascade.empty():
+            print("Warning: Face cascade is empty. Face detection will not work.")
+            return []
+        
         # Perform face detection
         try:
             faces = self.face_cascade.detectMultiScale(
@@ -61,6 +106,10 @@ class FaceDetector:
             print(f"Error during face detection: {e}")
             return []
         
+        # Handle case where no faces are detected but no exception is raised
+        if len(faces) == 0:
+            return []
+            
         # Create face information list
         face_info = []
         for (x, y, w, h) in faces:
