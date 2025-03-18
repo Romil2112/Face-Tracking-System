@@ -12,6 +12,10 @@ from video_capture import VideoCapture
 from tracking_visualizer import TrackingVisualizer
 import config
 
+import os
+# Disable MSMF hardware transforms to improve compatibility
+os.environ["OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS"] = "0"
+
 def parse_arguments() -> Dict[str, Any]:
     """
     Parse command line arguments.
