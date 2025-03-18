@@ -39,6 +39,20 @@ class FaceDetector:
         # Check if cascade loaded successfully
         if self.face_cascade.empty():
             raise ValueError(f"Error loading cascade classifier. Could not find a valid cascade file.")
+        
+        # Load eye cascade for face verification
+        self.eye_cascade = cv2.CascadeClassifier()
+        try:
+            # Try using OpenCV's built-in data
+            eye_cascade_path = cv2.data.haarcascades + 'haarcascade_eye.xml'
+            success = self.eye_cascade.load(eye_cascade_path)
+            if not success:
+                # Fallback method
+                eye_cascade_path = os.path.join(os.path.dirname(cv2.__file__), 'data', 'haarcascades', 'haarcascade_eye.xml')
+                self.eye_cascade.load(eye_cascade_path)
+        except Exception as e:
+            print(f"Warning: Could not load eye cascade classifier: {e}")
+            print("Face verification using eye detection will be disabled.")
             
         self.scale_factor = scale_factor
         self.min_neighbors = min_neighbors
@@ -123,9 +137,38 @@ class FaceDetector:
                 'area': area
             })
         
-        # Sort faces by area (largest first) and limit if requested
-        face_info.sort(key=lambda x: x['area'], reverse=True)
-        if max_faces is not None and max_faces > 0 and len(face_info) > max_faces:
-            face_info = face_info[:max_faces]
+        # Add a verification step using eye detection
+        verified_face_info = []
+        
+        if not self.eye_cascade.empty():
+            for face in face_info:
+                x, y, w, h = face['rect']
+                # Define region of interest for eye detection
+                roi_gray = gray[y:y+h, x:x+w]
+                
+                # Detect eyes in the face region
+                try:
+                    eyes = self.eye_cascade.detectMultiScale(
+                        roi_gray,
+                        scaleFactor=1.1,
+                        minNeighbors=3,
+                        minSize=(20, 20)
+                    )
+                    
+                    # Only consider it a face if at least one eye is detected
+                    if len(eyes) >= 1:
+                        verified_face_info.append(face)
+                except Exception as e:
+                    print(f"Error during eye detection: {e}")
+                    # If eye detection fails, fall back to accepting the face
+                    verified_face_info.append(face)
+        else:
+            # If eye cascade is not available, use all detected faces
+            verified_face_info = face_info
             
-        return face_info
+        # Sort verified faces by area (largest first) and limit if requested
+        verified_face_info.sort(key=lambda x: x['area'], reverse=True)
+        if max_faces is not None and max_faces > 0 and len(verified_face_info) > max_faces:
+            verified_face_info = verified_face_info[:max_faces]
+            
+        return verified_face_info
