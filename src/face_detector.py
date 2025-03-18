@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 import os
 from typing import List, Tuple, Dict, Optional
+import config
 
 class FaceDetector:
     """
@@ -85,6 +86,43 @@ class FaceDetector:
                 cascade_path += ".xml"
             success = self.face_cascade.load(cascade_path)
     
+    def _verify_face_geometry(self, face_rect):
+        """
+        Verify if the face has reasonable geometric properties.
+        """
+        x, y, w, h = face_rect
+        
+        # Check aspect ratio
+        aspect_ratio = w / h
+        if aspect_ratio < config.FACE_ASPECT_RATIO_MIN or aspect_ratio > config.FACE_ASPECT_RATIO_MAX:
+            return False
+            
+        # Check minimum face size (as percentage of image width)
+        if w < self.min_size[0] or h < self.min_size[1]:
+            return False
+            
+        return True
+    
+    def calculate_confidence(self, face_info, eye_count):
+        """
+        Calculate a confidence score for face detection.
+        """
+        confidence = 0.5  # Base confidence
+        
+        # More eyes = higher confidence
+        if eye_count > 0:
+            confidence += 0.3
+        if eye_count > 1:
+            confidence += 0.1
+            
+        # Good aspect ratio increases confidence
+        x, y, w, h = face_info['rect']
+        aspect_ratio = w / h
+        if config.FACE_ASPECT_RATIO_MIN <= aspect_ratio <= config.FACE_ASPECT_RATIO_MAX:
+            confidence += 0.1
+            
+        return min(confidence, 1.0)
+    
     def detect_faces(self, frame: np.ndarray, max_faces: int = None) -> List[Dict[str, any]]:
         """
         Detect faces in the given frame.
@@ -98,6 +136,7 @@ class FaceDetector:
             - 'rect': (x, y, w, h) - Face rectangle coordinates
             - 'center': (cx, cy) - Center point of the face
             - 'area': Area of the face rectangle
+            - 'confidence': Confidence score for the detection
         """
         # Convert to grayscale for face detection
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -137,12 +176,17 @@ class FaceDetector:
                 'area': area
             })
         
-        # Add a verification step using eye detection
+        # Add verification and confidence scoring
         verified_face_info = []
         
         if not self.eye_cascade.empty():
             for face in face_info:
                 x, y, w, h = face['rect']
+                
+                # Check face geometry
+                if not self._verify_face_geometry(face['rect']):
+                    continue
+                
                 # Define region of interest for eye detection
                 roi_gray = gray[y:y+h, x:x+w]
                 
@@ -150,21 +194,30 @@ class FaceDetector:
                 try:
                     eyes = self.eye_cascade.detectMultiScale(
                         roi_gray,
-                        scaleFactor=1.1,
-                        minNeighbors=3,
-                        minSize=(20, 20)
+                        scaleFactor=config.EYE_SCALE_FACTOR,
+                        minNeighbors=config.EYE_MIN_NEIGHBORS,
+                        minSize=config.EYE_MIN_SIZE
                     )
                     
-                    # Only consider it a face if at least one eye is detected
-                    if len(eyes) >= 1:
+                    # Calculate confidence based on eyes and geometry
+                    confidence = self.calculate_confidence(face, len(eyes))
+                    face['confidence'] = confidence
+                    
+                    # Only consider it a face if confidence meets threshold
+                    if confidence >= config.MINIMUM_CONFIDENCE:
                         verified_face_info.append(face)
+                    
                 except Exception as e:
                     print(f"Error during eye detection: {e}")
-                    # If eye detection fails, fall back to accepting the face
+                    # If eye detection fails, use geometry verification only
+                    face['confidence'] = 0.5  # Base confidence
                     verified_face_info.append(face)
         else:
-            # If eye cascade is not available, use all detected faces
-            verified_face_info = face_info
+            # If eye cascade is not available, use all detected faces with basic verification
+            for face in face_info:
+                if self._verify_face_geometry(face['rect']):
+                    face['confidence'] = 0.5  # Base confidence
+                    verified_face_info.append(face)
             
         # Sort verified faces by area (largest first) and limit if requested
         verified_face_info.sort(key=lambda x: x['area'], reverse=True)
@@ -172,41 +225,3 @@ class FaceDetector:
             verified_face_info = verified_face_info[:max_faces]
             
         return verified_face_info
-    
-    def _verify_face_geometry(self, face_rect):
-        """
-        Verify if the face has reasonable geometric properties.
-        """
-        x, y, w, h = face_rect
-        
-        # Check aspect ratio
-        aspect_ratio = w / h
-        if aspect_ratio < config.FACE_ASPECT_RATIO_MIN or aspect_ratio > config.FACE_ASPECT_RATIO_MAX:
-            return False
-            
-        # Check minimum face size (as percentage of image width)
-        if w < self.min_size[0] or h < self.min_size[1]:
-            return False
-            
-        return True
-
-    # Add this to your face detection process
-    def calculate_confidence(self, face_info, eye_count):
-        """
-        Calculate a confidence score for face detection.
-        """
-        confidence = 0.5  # Base confidence
-        
-        # More eyes = higher confidence
-        if eye_count > 0:
-            confidence += 0.3
-        if eye_count > 1:
-            confidence += 0.1
-            
-        # Good aspect ratio increases confidence
-        x, y, w, h = face_info['rect']
-        aspect_ratio = w / h
-        if config.FACE_ASPECT_RATIO_MIN <= aspect_ratio <= config.FACE_ASPECT_RATIO_MAX:
-            confidence += 0.1
-            
-        return min(confidence, 1.0)
