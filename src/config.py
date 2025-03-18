@@ -31,6 +31,22 @@ FONT_SCALE = 0.7
 FONT_COLOR = (255, 255, 255)  # White
 FONT_THICKNESS = 2
 
+# Face verification parameters
+EYE_DETECTION_ENABLED = True
+EYE_MIN_NEIGHBORS = 3
+EYE_SCALE_FACTOR = 1.1
+EYE_MIN_SIZE = (20, 20)
+
+# Temporal filtering parameters
+TEMPORAL_FILTERING_ENABLED = True
+TEMPORAL_FRAMES_HISTORY = 5
+TEMPORAL_CONSISTENCY_THRESHOLD = 3
+
+# Additional filtering parameters
+FACE_ASPECT_RATIO_MIN = 0.7
+FACE_ASPECT_RATIO_MAX = 0.9
+MINIMUM_CONFIDENCE = 0.6
+
 # Security settings
 MAX_FACES = 10  # Maximum number of faces to track (for performance)
 FRAME_SKIP = 2  # Process every nth frame for performance
