@@ -41,8 +41,6 @@ def parse_arguments() -> Dict[str, Any]:
     
     return vars(parser.parse_args())
 
-# In the main() function, modify the face detector initialization part:
-
 def main():
     """
     Main function to run the face tracking application.
@@ -102,14 +100,29 @@ def main():
     
     print("Face tracking started. Press 'q' to quit.")
     
+    # Error handling variables for main loop
+    retry_count = 0
+    max_retries = 3
+    
     # Main loop
     while True:
         # Read a frame from the video capture
         success, frame = video_capture.read()
         
         if not success:
-            print("Error reading frame from video capture")
-            break
+            retry_count += 1
+            print(f"Error reading frame from video capture (Attempt {retry_count}/{max_retries})")
+            
+            if retry_count >= max_retries:
+                print("Maximum retry attempts reached. Stopping face tracking.")
+                break
+                
+            # Wait a moment before retrying
+            time.sleep(1)
+            continue
+        
+        # Reset retry counter on successful frame
+        retry_count = 0
         
         # Process every nth frame for better performance
         if process_this_frame == 0:
