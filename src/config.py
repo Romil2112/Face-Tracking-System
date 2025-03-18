@@ -8,6 +8,13 @@ CAMERA_WIDTH = 640
 CAMERA_HEIGHT = 480
 CAMERA_FPS = 30
 
+# Camera backend settings
+CAMERA_BACKEND_DSHOW = True  # Use DirectShow backend (recommended for Windows)
+CAMERA_BACKEND_MSMF = False   # Use MSMF backend (may cause issues on some systems)
+
+# Video format settings
+CAMERA_FOURCC = 'MJPG'  # 'MJPG' tends to work better than default on many webcams
+
 # Face detection settings
 CASCADE_PATH = 'haarcascade_frontalface_default.xml'
 SCALE_FACTOR = 1.1
