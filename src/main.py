@@ -6,6 +6,7 @@ import cv2
 import time
 import argparse
 from typing import Dict, Any
+import numpy as np
 
 from face_detector import FaceDetector
 from video_capture import VideoCapture
@@ -79,7 +80,7 @@ def main():
     
     # Initialize temporal filter if enabled
     temporal_filter = None
-    if hasattr(config, 'TEMPORAL_FILTERING_ENABLED') and config.TEMPORAL_FILTERING_ENABLED:
+    if config.TEMPORAL_FILTERING_ENABLED:
         try:
             from temporal_filter import TemporalFilter
             temporal_filter = TemporalFilter(
@@ -93,6 +94,10 @@ def main():
         except Exception as e:
             print(f"Warning: Error initializing temporal filter: {e}")
             print("Temporal filtering will be disabled")
+    
+    # Initialize motion detection if enabled
+    motion_detection = config.MOTION_DETECTION_ENABLED
+    prev_frame = None
     
     # Initialize tracking visualizer
     visualizer = TrackingVisualizer(
@@ -146,9 +151,38 @@ def main():
             # Detect faces
             faces = face_detector.detect_faces(frame, max_faces=args['max_faces'])
             
+            # Apply motion detection if enabled
+            if motion_detection and prev_frame is not None:
+                try:
+                    from motion_utils import detect_motion
+                    motion_magnitude = detect_motion(prev_frame, frame)
+                    
+                    if motion_magnitude is not None:
+                        # Filter faces based on motion
+                        motion_faces = []
+                        for face in faces:
+                            x, y, w, h = face['rect']
+                            # Calculate average motion in the face area
+                            face_motion = np.mean(motion_magnitude[y:y+h, x:x+w])
+                            face['motion'] = face_motion
+                            
+                            # Only keep faces with significant motion
+                            if face_motion >= config.MOTION_THRESHOLD:
+                                motion_faces.append(face)
+                            
+                        faces = motion_faces
+                except Exception as e:
+                    print(f"Warning: Error in motion detection: {e}")
+            
+            # Save current frame for next iteration's motion detection
+            prev_frame = frame.copy()
+            
             # Apply temporal filtering if enabled
             if temporal_filter is not None:
-                faces = temporal_filter.update(faces)
+                try:
+                    faces = temporal_filter.update(faces)
+                except Exception as e:
+                    print(f"Warning: Error in temporal filtering: {e}")
             
             # Calculate FPS
             frame_count += 1
