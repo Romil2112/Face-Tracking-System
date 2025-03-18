@@ -47,6 +47,23 @@ FACE_ASPECT_RATIO_MIN = 0.7
 FACE_ASPECT_RATIO_MAX = 0.9
 MINIMUM_CONFIDENCE = 0.6
 
+# Face aspect ratio constraints
+FACE_ASPECT_RATIO_MIN = 0.7
+FACE_ASPECT_RATIO_MAX = 0.9
+
+# Confidence threshold
+MINIMUM_CONFIDENCE = 0.6
+
+# Temporal filtering parameters
+TEMPORAL_FILTERING_ENABLED = True
+TEMPORAL_FRAMES_HISTORY = 5
+TEMPORAL_CONSISTENCY_THRESHOLD = 3
+
+# Motion detection parameters
+MOTION_DETECTION_ENABLED = True
+MOTION_THRESHOLD = 10.0
+
+
 # Security settings
 MAX_FACES = 10  # Maximum number of faces to track (for performance)
 FRAME_SKIP = 2  # Process every nth frame for performance
