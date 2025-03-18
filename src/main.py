@@ -77,6 +77,23 @@ def main():
     
     print(f"Video capture started with camera index: {args['camera']}")
     
+    # Initialize temporal filter if enabled
+    temporal_filter = None
+    if hasattr(config, 'TEMPORAL_FILTERING_ENABLED') and config.TEMPORAL_FILTERING_ENABLED:
+        try:
+            from temporal_filter import TemporalFilter
+            temporal_filter = TemporalFilter(
+                history_size=config.TEMPORAL_FRAMES_HISTORY,
+                consistency_threshold=config.TEMPORAL_CONSISTENCY_THRESHOLD
+            )
+            print("Temporal filtering enabled")
+        except ImportError as e:
+            print(f"Warning: Could not import TemporalFilter: {e}")
+            print("Temporal filtering will be disabled")
+        except Exception as e:
+            print(f"Warning: Error initializing temporal filter: {e}")
+            print("Temporal filtering will be disabled")
+    
     # Initialize tracking visualizer
     visualizer = TrackingVisualizer(
         rect_color=config.FACE_RECT_COLOR,
@@ -128,6 +145,10 @@ def main():
         if process_this_frame == 0:
             # Detect faces
             faces = face_detector.detect_faces(frame, max_faces=args['max_faces'])
+            
+            # Apply temporal filtering if enabled
+            if temporal_filter is not None:
+                faces = temporal_filter.update(faces)
             
             # Calculate FPS
             frame_count += 1
