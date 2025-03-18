@@ -37,7 +37,14 @@ class VideoCapture:
             True if started successfully, False otherwise
         """
         try:
-            self.cap = cv2.VideoCapture(self.camera_index)
+            # Try to use DirectShow backend first (works better on Windows)
+            self.cap = cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW)
+            
+            if not self.cap.isOpened():
+                print(f"DirectShow backend failed, trying default backend...")
+                # If DirectShow fails, try the default backend
+                self.cap = cv2.VideoCapture(self.camera_index)
+                
             if not self.cap.isOpened():
                 print(f"Error: Could not open camera {self.camera_index}")
                 return False
@@ -46,6 +53,9 @@ class VideoCapture:
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
             self.cap.set(cv2.CAP_PROP_FPS, self.fps)
+            
+            # Set MJPG format (helps with some webcams)
+            self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'))
             
             self.last_frame_time = time.time()
             return True
@@ -72,6 +82,12 @@ class VideoCapture:
             time.sleep(self.frame_time - elapsed)
         
         success, frame = self.cap.read()
+        
+        if not success:
+            # If frame grab failed, try again once
+            print("Frame grab failed, trying again...")
+            success, frame = self.cap.read()
+        
         self.last_frame_time = time.time()
         
         return success, frame
