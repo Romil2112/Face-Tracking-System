@@ -1,27 +1,23 @@
-"""
-Configuration settings for the face tracking application.
-"""
+"""Configuration for face tracking app."""
 
-# Camera settings
-CAMERA_INDEX = 0
-CAMERA_WIDTH = 640
-CAMERA_HEIGHT = 480
-CAMERA_FPS = 30
+# Camera config
+CAMERA_INDEX = 0  # Default camera
+CAMERA_WIDTH = 640  # Frame width
+CAMERA_HEIGHT = 480  # Frame height
+CAMERA_FPS = 30  # Target framerate
 
-# Camera backend settings
-CAMERA_BACKEND_DSHOW = True  # Use DirectShow backend (recommended for Windows)
-CAMERA_BACKEND_MSMF = False   # Use MSMF backend (may cause issues on some systems)
+# Camera backend
+CAMERA_BACKEND_DSHOW = True  # DirectShow (Windows)
+CAMERA_BACKEND_MSMF = False  # Media Foundation
+CAMERA_FOURCC = 'MJPG'  # Video compression format
 
-# Video format settings
-CAMERA_FOURCC = 'MJPG'  # 'MJPG' tends to work better than default on many webcams
+# Face detection
+CASCADE_PATH = 'haarcascade_frontalface_default.xml'  # Haar cascade file
+SCALE_FACTOR = 1.1  # Image scaling factor
+MIN_NEIGHBORS = 5  # Detection quality
+MIN_SIZE = (30, 30)  # Minimum face size
 
-# Face detection settings
-CASCADE_PATH = 'haarcascade_frontalface_default.xml'
-SCALE_FACTOR = 1.1
-MIN_NEIGHBORS = 5
-MIN_SIZE = (30, 30)
-
-# Visualization settings
+# Visualization
 FACE_RECT_COLOR = (0, 255, 0)  # Green
 FACE_RECT_THICKNESS = 2
 FACE_CENTER_COLOR = (0, 0, 255)  # Red
@@ -31,39 +27,26 @@ FONT_SCALE = 0.7
 FONT_COLOR = (255, 255, 255)  # White
 FONT_THICKNESS = 2
 
-# Face verification parameters
+# Eye detection
 EYE_DETECTION_ENABLED = True
 EYE_MIN_NEIGHBORS = 3
 EYE_SCALE_FACTOR = 1.1
 EYE_MIN_SIZE = (20, 20)
 
-# Temporal filtering parameters
+# Face geometry
+FACE_ASPECT_RATIO_MIN = 0.7  # Min width/height ratio
+FACE_ASPECT_RATIO_MAX = 0.9  # Max width/height ratio
+MINIMUM_CONFIDENCE = 0.6  # Min detection confidence
+
+# Temporal filtering
 TEMPORAL_FILTERING_ENABLED = True
-TEMPORAL_FRAMES_HISTORY = 5
-TEMPORAL_CONSISTENCY_THRESHOLD = 3
+TEMPORAL_FRAMES_HISTORY = 5  # Frame history count
+TEMPORAL_CONSISTENCY_THRESHOLD = 3  # Min frame consistency
 
-# Additional filtering parameters
-FACE_ASPECT_RATIO_MIN = 0.7
-FACE_ASPECT_RATIO_MAX = 0.9
-MINIMUM_CONFIDENCE = 0.6
-
-# Face aspect ratio constraints
-FACE_ASPECT_RATIO_MIN = 0.7
-FACE_ASPECT_RATIO_MAX = 0.9
-
-# Confidence threshold
-MINIMUM_CONFIDENCE = 0.6
-
-# Temporal filtering parameters
-TEMPORAL_FILTERING_ENABLED = True
-TEMPORAL_FRAMES_HISTORY = 5
-TEMPORAL_CONSISTENCY_THRESHOLD = 3
-
-# Motion detection parameters
+# Motion detection
 MOTION_DETECTION_ENABLED = True
-MOTION_THRESHOLD = 10.0
+MOTION_THRESHOLD = 10.0  # Min motion magnitude
 
-
-# Security settings
-MAX_FACES = 10  # Maximum number of faces to track (for performance)
-FRAME_SKIP = 2  # Process every nth frame for performance
+# Performance
+MAX_FACES = 10  # Max faces to track
+FRAME_SKIP = 2  # Process every n-th frame
