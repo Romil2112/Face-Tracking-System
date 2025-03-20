@@ -209,3 +209,10 @@ class FaceDetector:
                 # Detect eyes in the face region
                 try:
                     eye
+                except Exception as e:
+                    if hasattr(config, 'DEBUG_MODE') and config.DEBUG_MODE:
+                        print(f"Error during eye detection: {e}")
+                    # If eye detection fails, still accept the face with base confidence
+                    face['confidence'] = 0.5
+                    face['eye_count'] = 0
+                    verified_face_info.append(face)
