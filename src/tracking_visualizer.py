@@ -1,5 +1,7 @@
 """
-Visualization module for face tracking.
+Visualization Module for Face Tracking
+Author: Romil V. Shah
+This module handles the visualization of face tracking results.
 """
 
 import cv2

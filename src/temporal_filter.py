@@ -1,5 +1,7 @@
 """
-Temporal filtering module for reducing false positives in face tracking.
+Temporal Filtering Module for Face Tracking
+Author: Romil V. Shah
+This module implements temporal filtering to reduce false positives in face tracking.
 """
 
 import numpy as np

@@ -1,6 +1,9 @@
 """
-Non-Maximum Suppression utilities for face detection.
+Non-Maximum Suppression Module for Face Tracking
+Author: Romil V. Shah
+This module provides utilities for applying Non-Maximum Suppression to filter overlapping face detections.
 """
+
 
 import numpy as np
 import cv2

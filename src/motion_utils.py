@@ -1,3 +1,9 @@
+"""
+Motion Detection Module for Face Tracking
+Author: Romil V. Shah
+This module provides utilities for detecting motion between video frames.
+"""
+
 import cv2
 import numpy as np
 
