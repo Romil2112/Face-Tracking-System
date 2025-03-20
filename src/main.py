@@ -39,6 +39,8 @@ def parse_arguments() -> Dict[str, Any]:
                         help=f'Min neighbors for face detection (default: {config.MIN_NEIGHBORS})')
     parser.add_argument('--max-faces', type=int, default=config.MAX_FACES,
                         help=f'Maximum number of faces to track (default: {config.MAX_FACES})')
+    parser.add_argument('--debug', action='store_true',
+                        help='Enable debug output')
     
     return vars(parser.parse_args())
 
@@ -48,6 +50,10 @@ def main():
     """
     # Parse command line arguments
     args = parse_arguments()
+    
+    # Set debug mode from arguments
+    if args['debug'] and hasattr(config, 'DEBUG_MODE'):
+        config.DEBUG_MODE = True
     
     # Initialize face detector
     try:
@@ -80,7 +86,7 @@ def main():
     
     # Initialize temporal filter if enabled
     temporal_filter = None
-    if config.TEMPORAL_FILTERING_ENABLED:
+    if hasattr(config, 'TEMPORAL_FILTERING_ENABLED') and config.TEMPORAL_FILTERING_ENABLED:
         try:
             from temporal_filter import TemporalFilter
             temporal_filter = TemporalFilter(
@@ -96,7 +102,14 @@ def main():
             print("Temporal filtering will be disabled")
     
     # Initialize motion detection if enabled
-    motion_detection = config.MOTION_DETECTION_ENABLED
+    motion_detection = hasattr(config, 'MOTION_DETECTION_ENABLED') and config.MOTION_DETECTION_ENABLED
+    if motion_detection:
+        try:
+            from motion_utils import detect_motion
+            print("Motion detection enabled")
+        except ImportError as e:
+            print(f"Warning: Could not import motion_utils: {e}")
+            motion_detection = False
     prev_frame = None
     
     # Initialize tracking visualizer
@@ -151,6 +164,11 @@ def main():
             # Detect faces
             faces = face_detector.detect_faces(frame, max_faces=args['max_faces'])
             
+            if hasattr(config, 'DEBUG_MODE') and config.DEBUG_MODE:
+                print(f"Detected {len(faces)} faces")
+                for i, face in enumerate(faces):
+                    print(f"  Face #{i+1}: confidence={face.get('confidence', 'N/A')}, eyes={face.get('eye_count', 'N/A')}")
+            
             # Apply motion detection if enabled
             if motion_detection and prev_frame is not None:
                 try:
@@ -169,20 +187,30 @@ def main():
                             # Only keep faces with significant motion
                             if face_motion >= config.MOTION_THRESHOLD:
                                 motion_faces.append(face)
-                            
+                            elif hasattr(config, 'DEBUG_MODE') and config.DEBUG_MODE:
+                                print(f"Face rejected by motion: {face_motion} < {config.MOTION_THRESHOLD}")
+                                
+                        if hasattr(config, 'DEBUG_MODE') and config.DEBUG_MODE:
+                            print(f"Motion filtering: {len(faces)} → {len(motion_faces)} faces")
                         faces = motion_faces
                 except Exception as e:
-                    print(f"Warning: Error in motion detection: {e}")
+                    if hasattr(config, 'DEBUG_MODE') and config.DEBUG_MODE:
+                        print(f"Warning: Error in motion detection: {e}")
             
             # Save current frame for next iteration's motion detection
-            prev_frame = frame.copy()
+            if motion_detection:
+                prev_frame = frame.copy()
             
             # Apply temporal filtering if enabled
             if temporal_filter is not None:
                 try:
+                    before_count = len(faces)
                     faces = temporal_filter.update(faces)
+                    if hasattr(config, 'DEBUG_MODE') and config.DEBUG_MODE and before_count != len(faces):
+                        print(f"Temporal filtering: {before_count} → {len(faces)} faces")
                 except Exception as e:
-                    print(f"Warning: Error in temporal filtering: {e}")
+                    if hasattr(config, 'DEBUG_MODE') and config.DEBUG_MODE:
+                        print(f"Warning: Error in temporal filtering: {e}")
             
             # Calculate FPS
             frame_count += 1
@@ -191,6 +219,8 @@ def main():
                 fps = frame_count / elapsed_time
                 frame_count = 0
                 start_time = time.time()
+                if hasattr(config, 'DEBUG_MODE') and config.DEBUG_MODE:
+                    print(f"FPS: {fps:.2f}")
             
             # Update FPS in visualizer
             visualizer.set_fps(fps)
@@ -208,6 +238,11 @@ def main():
         key = cv2.waitKey(1) & 0xFF
         if key == ord('q'):
             break
+        
+        # Toggle debug mode with 'd' key
+        if key == ord('d') and hasattr(config, 'DEBUG_MODE'):
+            config.DEBUG_MODE = not config.DEBUG_MODE
+            print(f"Debug mode {'enabled' if config.DEBUG_MODE else 'disabled'}")
     
     # Clean up
     video_capture.stop()
