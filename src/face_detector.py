@@ -95,10 +95,14 @@ class FaceDetector:
         # Check aspect ratio
         aspect_ratio = w / h
         if aspect_ratio < config.FACE_ASPECT_RATIO_MIN or aspect_ratio > config.FACE_ASPECT_RATIO_MAX:
+            if hasattr(config, 'DEBUG_MODE') and config.DEBUG_MODE:
+                print(f"Face rejected: aspect ratio {aspect_ratio:.2f} outside range [{config.FACE_ASPECT_RATIO_MIN}, {config.FACE_ASPECT_RATIO_MAX}]")
             return False
             
-        # Check minimum face size (as percentage of image width)
+        # Check minimum face size
         if w < self.min_size[0] or h < self.min_size[1]:
+            if hasattr(config, 'DEBUG_MODE') and config.DEBUG_MODE:
+                print(f"Face rejected: size {w}x{h} smaller than minimum {self.min_size[0]}x{self.min_size[1]}")
             return False
             
         return True
@@ -118,8 +122,9 @@ class FaceDetector:
         # Good aspect ratio increases confidence
         x, y, w, h = face_info['rect']
         aspect_ratio = w / h
-        if config.FACE_ASPECT_RATIO_MIN <= aspect_ratio <= config.FACE_ASPECT_RATIO_MAX:
-            confidence += 0.1
+        if hasattr(config, 'FACE_ASPECT_RATIO_MIN') and hasattr(config, 'FACE_ASPECT_RATIO_MAX'):
+            if config.FACE_ASPECT_RATIO_MIN <= aspect_ratio <= config.FACE_ASPECT_RATIO_MAX:
+                confidence += 0.1
             
         return min(confidence, 1.0)
     
@@ -138,6 +143,10 @@ class FaceDetector:
             - 'area': Area of the face rectangle
             - 'confidence': Confidence score for the detection
         """
+        # Debugging
+        if hasattr(config, 'DEBUG_MODE') and config.DEBUG_MODE:
+            print("Starting face detection...")
+        
         # Convert to grayscale for face detection
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         
@@ -155,6 +164,10 @@ class FaceDetector:
                 minSize=self.min_size,
                 flags=cv2.CASCADE_SCALE_IMAGE
             )
+            
+            if hasattr(config, 'DEBUG_MODE') and config.DEBUG_MODE:
+                print(f"Initial face detection found {len(faces)} faces")
+                
         except Exception as e:
             print(f"Error during face detection: {e}")
             return []
@@ -173,18 +186,21 @@ class FaceDetector:
             face_info.append({
                 'rect': (x, y, w, h),
                 'center': (center_x, center_y),
-                'area': area
+                'area': area,
+                'confidence': 0.5  # Default confidence
             })
         
         # Add verification and confidence scoring
         verified_face_info = []
         
-        if not self.eye_cascade.empty():
+        if not self.eye_cascade.empty() and hasattr(config, 'EYE_DETECTION_ENABLED') and config.EYE_DETECTION_ENABLED:
             for face in face_info:
                 x, y, w, h = face['rect']
                 
                 # Check face geometry
-                if not self._verify_face_geometry(face['rect']):
+                geometry_valid = self._verify_face_geometry(face['rect'])
+                if not geometry_valid and hasattr(config, 'DEBUG_MODE') and config.DEBUG_MODE:
+                    print(f"Face at {face['rect']} rejected by geometry check")
                     continue
                 
                 # Define region of interest for eye detection
@@ -192,36 +208,4 @@ class FaceDetector:
                 
                 # Detect eyes in the face region
                 try:
-                    eyes = self.eye_cascade.detectMultiScale(
-                        roi_gray,
-                        scaleFactor=config.EYE_SCALE_FACTOR,
-                        minNeighbors=config.EYE_MIN_NEIGHBORS,
-                        minSize=config.EYE_MIN_SIZE
-                    )
-                    
-                    # Calculate confidence based on eyes and geometry
-                    confidence = self.calculate_confidence(face, len(eyes))
-                    face['confidence'] = confidence
-                    
-                    # Only consider it a face if confidence meets threshold
-                    if confidence >= config.MINIMUM_CONFIDENCE:
-                        verified_face_info.append(face)
-                    
-                except Exception as e:
-                    print(f"Error during eye detection: {e}")
-                    # If eye detection fails, use geometry verification only
-                    face['confidence'] = 0.5  # Base confidence
-                    verified_face_info.append(face)
-        else:
-            # If eye cascade is not available, use all detected faces with basic verification
-            for face in face_info:
-                if self._verify_face_geometry(face['rect']):
-                    face['confidence'] = 0.5  # Base confidence
-                    verified_face_info.append(face)
-            
-        # Sort verified faces by area (largest first) and limit if requested
-        verified_face_info.sort(key=lambda x: x['area'], reverse=True)
-        if max_faces is not None and max_faces > 0 and len(verified_face_info) > max_faces:
-            verified_face_info = verified_face_info[:max_faces]
-            
-        return verified_face_info
+                    eye
