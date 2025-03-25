@@ -7,187 +7,278 @@ This module contains the main execution logic for the face tracking application.
 import cv2
 import time
 import argparse
-from typing import Dict, Any
+import sys
+import os
 import numpy as np
+import concurrent.futures
+import logging
+from typing import Tuple, Optional, List, Dict, Any
 from face_detector import FaceDetector
 from video_capture import VideoCapture
 from tracking_visualizer import TrackingVisualizer
+from error_handling import retry, ErrorHandler
+from nms_utils import apply_nms
 import config
-import os
 
+# Configure logging
+logger = logging.getLogger(__name__)
+
+# Configure environment for optimal performance
+os.environ["OPENCV_OCL4DNN_CONFIG_PATH"] = "/tmp/ocl_cache"  # Linux/macOS
+# os.environ["OPENCV_OCL4DNN_CONFIG_PATH"] = "C:\\Temp\\ocl_cache"  # Windows
+os.environ["OPENCV_OPENCL_DEVICE"] = "AMD:GPU"  # Force specific device
 os.environ["OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS"] = "0"
 
 def parse_arguments() -> Dict[str, Any]:
+    """Parse command line arguments."""
     parser = argparse.ArgumentParser(description='Real-time face tracking using OpenCV')
     parser.add_argument('--camera', type=int, default=config.CAMERA_INDEX,
-                        help=f'Camera index (default: {config.CAMERA_INDEX})')
+                      help=f'Camera index (default: {config.CAMERA_INDEX})')
     parser.add_argument('--width', type=int, default=config.CAMERA_WIDTH,
-                        help=f'Camera width (default: {config.CAMERA_WIDTH})')
+                      help=f'Camera width (default: {config.CAMERA_WIDTH})')
     parser.add_argument('--height', type=int, default=config.CAMERA_HEIGHT,
-                        help=f'Camera height (default: {config.CAMERA_HEIGHT})')
+                      help=f'Camera height (default: {config.CAMERA_HEIGHT})')
     parser.add_argument('--cascade', type=str, default=config.CASCADE_PATH,
-                        help=f'Path to Haar cascade XML file (default: {config.CASCADE_PATH})')
+                      help=f'Path to Haar cascade XML file (default: {config.CASCADE_PATH})')
     parser.add_argument('--scale-factor', type=float, default=config.SCALE_FACTOR,
-                        help=f'Scale factor for face detection (default: {config.SCALE_FACTOR})')
+                      help=f'Scale factor for face detection (default: {config.SCALE_FACTOR})')
     parser.add_argument('--min-neighbors', type=int, default=config.MIN_NEIGHBORS,
-                        help=f'Min neighbors for face detection (default: {config.MIN_NEIGHBORS})')
+                      help=f'Min neighbors for face detection (default: {config.MIN_NEIGHBORS})')
     parser.add_argument('--max-faces', type=int, default=config.MAX_FACES,
-                        help=f'Maximum number of faces to track (default: {config.MAX_FACES})')
+                      help=f'Maximum number of faces to track (default: {config.MAX_FACES})')
     parser.add_argument('--debug', action='store_true',
-                        help='Enable debug output')
+                      help='Enable debug output')
     return vars(parser.parse_args())
 
-def main():
-    args = parse_arguments()
-    if args['debug']:
-        config.DEBUG_MODE = True
+@retry(max_attempts=3, delay=2, allowed_exceptions=(IOError, cv2.error))
+def initialize_video_capture(camera_index: int, width: int, height: int, fps: int) -> VideoCapture:
+    """Initialize and configure video capture with retry logic."""
+    video_capture = VideoCapture(camera_index, width, height, fps)
+    if not video_capture.start():
+        raise IOError("Failed to start video capture")
+    return video_capture
+
+def verify_acceleration():
+    """Validate hardware acceleration availability"""
+    try:
+        if cv2.cuda.getCudaEnabledDeviceCount() > 0:
+            cuda_backend = getattr(cv2.dnn, 'DNN_BACKEND_CUDA', cv2.dnn.DNN_BACKEND_OPENCV)
+            available_targets = getattr(cv2.dnn, 'getAvailableTargets', lambda x: [])(cuda_backend)
+            
+            if getattr(cv2.dnn, 'DNN_TARGET_CUDA', None) not in available_targets:
+                logger.warning(f"CUDA targets unavailable for backend {cuda_backend}")
+                
+            logger.info(f"CUDA acceleration available (Targets: {available_targets})")
+            return True
+        else:
+            cpu_backend = cv2.dnn.DNN_BACKEND_OPENCV
+            available_targets = getattr(cv2.dnn, 'getAvailableTargets', lambda x: [])(cpu_backend)
+            logger.info(f"CPU acceleration active (Available targets: {available_targets})")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Acceleration verification failed: {str(e)}")
+        return False
+
+
+def validate_configuration() -> None:
+    """Validate critical configuration parameters."""
+    required_files = [
+        (config.CASCADE_PATH, "Haar Cascade XML"),
+        (config.DNN_MODEL_PATH, "DNN Model"),
+        (config.DNN_CONFIG_PATH, "DNN Config")
+    ]
+    for path, name in required_files:
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"{name} file not found at {path}")
+    if not 0 < config.DNN_CONFIDENCE_THRESHOLD <= 1:
+        raise ValueError("DNN confidence threshold must be between 0 and 1")
+    if config.CAMERA_INDEX < 0:
+        raise ValueError("Camera index cannot be negative")
+    
+    # Add backend validation
+    available_backends = []  
+    try:  
+        available_backends = cv2.dnn.getAvailableBackends()  
+    except AttributeError:  
+        # Fallback for older OpenCV versions  
+        available_backends = ["OPENCV", "CUDA"]
+    if cv2.dnn.DNN_BACKEND_CUDA in available_backends:
+        if cv2.dnn.DNN_TARGET_CUDA not in cv2.dnn.getAvailableTargets(cv2.dnn.DNN_BACKEND_CUDA):
+            raise RuntimeError("CUDA backend available but CUDA targets missing")
+
+def process_frame(frame: np.ndarray, face_detector: FaceDetector, args: Dict[str, Any],
+                 motion_detection: bool, prev_frame: np.ndarray, temporal_filter) -> List[Dict]:
+    """Process a single frame through the detection pipeline."""
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        dnn_future = executor.submit(face_detector.detect_faces_dnn, frame)
+        haar_future = executor.submit(face_detector.detect_faces_haar, frame)
+        dnn_faces = dnn_future.result()
+        haar_faces = haar_future.result()
+
+    combined_faces = dnn_faces + haar_faces
+    faces = apply_nms(combined_faces, config.NMS_THRESHOLD)
+    faces = [f for f in faces if f['confidence'] >= config.MINIMUM_CONFIDENCE]
+    faces = faces[:args['max_faces']]
+
+    if config.DEBUG_MODE:
+        logger.debug(f"Detected {len(faces)} faces after NMS")
+
+    if config.MOTION_DETECTION_ENABLED and prev_frame is not None:
+        try:
+            from motion_utils import detect_motion
+            motion_magnitude = detect_motion(prev_frame, frame)
+            if motion_magnitude is not None:
+                motion_faces = []
+                for face in faces:
+                    x, y, w, h = face['rect']
+                    face_motion = np.mean(motion_magnitude[y:y+h, x:x+w])
+                    if face_motion >= config.MOTION_THRESHOLD:
+                        motion_faces.append(face)
+                faces = motion_faces
+        except Exception as e:
+            if config.DEBUG_MODE:
+                logger.debug(f"Motion detection error: {e}")
+
+    if temporal_filter is not None:
+        try:
+            faces = temporal_filter.update(faces)
+        except Exception as e:
+            if config.DEBUG_MODE:
+                logger.debug(f"Temporal filtering error: {e}")
+
+    return faces
+
+def update_fps(frame_count: int, start_time: float) -> Tuple[Optional[float], int, float]:
+    """Calculate and update FPS metrics."""
+    elapsed_time = time.time() - start_time
+    if elapsed_time >= 1.0:
+        fps = frame_count / elapsed_time
+        return fps, 0, time.time()
+    return None, frame_count, start_time
+
+def main_loop(video_capture: VideoCapture, face_detector: FaceDetector,
+             visualizer: TrackingVisualizer, args: Dict[str, Any],
+             motion_detection: bool, temporal_filter, error_handler: ErrorHandler) -> None:
+    """Main processing loop with error handling and recovery."""
+    frame_count = 0
+    start_time = time.time()
+    process_this_frame = 0
+    prev_frame = None
+    retry_count = 0
+    max_retries = 3
 
     try:
+        while True:
+            success, frame = video_capture.read()
+            if not success or frame is None:
+                retry_count += 1
+                if retry_count >= max_retries:
+                    raise IOError("Maximum retry attempts reached. Stopping face tracking.")
+                time.sleep(1)
+                continue
+
+            retry_count = 0
+            frame = cv2.flip(frame, 1)
+
+            if process_this_frame == 0:
+                faces = process_frame(frame, face_detector, args,
+                                    motion_detection, prev_frame, temporal_filter)
+                if motion_detection:
+                    prev_frame = frame.copy()
+
+                fps, frame_count, start_time = update_fps(frame_count, start_time)
+                if fps is not None:
+                    visualizer.set_fps(fps)
+                    frame_count = 0
+
+                output_frame = visualizer.draw_faces(frame, faces)
+                cv2.imshow('Face Tracking', output_frame)
+
+            process_this_frame = (process_this_frame + 1) % config.FRAME_SKIP
+
+            if cv2.waitKey(1) & 0xFF == ord('q') or cv2.getWindowProperty('Face Tracking', cv2.WND_PROP_VISIBLE) < 1:
+                break
+
+    except Exception as e:
+        logger.error(f"Error in main loop: {e}")
+        if not error_handler.handle_camera_error(e):
+            raise
+    finally:
+        video_capture.stop()
+        cv2.destroyAllWindows()
+
+def main() -> None:
+    """Main application entry point."""
+    args = parse_arguments()
+    error_handler = ErrorHandler()
+
+    try:
+        validate_configuration()
+        if args['debug']:
+            config.DEBUG_MODE = True
+            logging.basicConfig(level=logging.DEBUG)
+
+        # Initialize components
         face_detector = FaceDetector(
-            cascade_path=args['cascade'],
+            dnn_model_path=config.DNN_MODEL_PATH,
+            dnn_config_path=config.DNN_CONFIG_PATH,
+            cascade_path=config.CASCADE_PATH,
             scale_factor=args['scale_factor'],
             min_neighbors=args['min_neighbors'],
             min_size=config.MIN_SIZE
         )
-        print(f"Face detector initialized successfully")
+
+        video_capture = initialize_video_capture(
+            args['camera'],
+            args['width'],
+            args['height'],
+            config.CAMERA_FPS
+        )
+
+        # Verify acceleration support
+        verify_acceleration()
+
+        # Initialize temporal filter
+        temporal_filter = None
+        if config.TEMPORAL_FILTERING_ENABLED:
+            try:
+                from temporal_filter import TemporalFilter
+                temporal_filter = TemporalFilter(
+                    history_size=config.TEMPORAL_FRAMES_HISTORY,
+                    consistency_threshold=config.TEMPORAL_CONSISTENCY_THRESHOLD
+                )
+            except Exception as e:
+                logger.warning(f"Temporal filtering disabled: {e}")
+
+        # Initialize motion detection
+        motion_detection = config.MOTION_DETECTION_ENABLED
+        if motion_detection:
+            try:
+                from motion_utils import detect_motion
+            except ImportError as e:
+                motion_detection = False
+                logger.warning(f"Motion detection disabled: {e}")
+
+        visualizer = TrackingVisualizer(
+            rect_color=config.FACE_RECT_COLOR,
+            rect_thickness=config.FACE_RECT_THICKNESS,
+            center_color=config.FACE_CENTER_COLOR,
+            center_radius=config.FACE_CENTER_RADIUS,
+            font=getattr(cv2, config.FONT),
+            font_scale=config.FONT_SCALE,
+            font_color=config.FONT_COLOR,
+            font_thickness=config.FONT_THICKNESS
+        )
+
+        main_loop(video_capture, face_detector, visualizer, args,
+                 motion_detection, temporal_filter, error_handler)
+
     except Exception as e:
-        print(f"Error initializing face detector: {e}")
-        print("Please ensure the Haar cascade XML file exists and is valid")
-        print("You can download it from: https://github.com/opencv/opencv/tree/master/data/haarcascades")
-        return
-
-    video_capture = VideoCapture(
-        camera_index=args['camera'],
-        width=args['width'],
-        height=args['height'],
-        fps=config.CAMERA_FPS
-    )
-    if not video_capture.start():
-        print("Error starting video capture")
-        return
-    print(f"Video capture started with camera index: {args['camera']}")
-
-    temporal_filter = None
-    if config.TEMPORAL_FILTERING_ENABLED:
-        try:
-            from temporal_filter import TemporalFilter
-            temporal_filter = TemporalFilter(
-                history_size=config.TEMPORAL_FRAMES_HISTORY,
-                consistency_threshold=config.TEMPORAL_CONSISTENCY_THRESHOLD
-            )
-            print("Temporal filtering enabled")
-        except ImportError as e:
-            print(f"Warning: Could not import TemporalFilter: {e}")
-            print("Temporal filtering will be disabled")
-        except Exception as e:
-            print(f"Warning: Error initializing temporal filter: {e}")
-            print("Temporal filtering will be disabled")
-
-    motion_detection = config.MOTION_DETECTION_ENABLED
-    if motion_detection:
-        try:
-            from motion_utils import detect_motion
-            print("Motion detection enabled")
-        except ImportError as e:
-            print(f"Warning: Could not import motion_utils: {e}")
-            motion_detection = False
-
-    prev_frame = None
-    visualizer = TrackingVisualizer(
-        rect_color=config.FACE_RECT_COLOR,
-        rect_thickness=config.FACE_RECT_THICKNESS,
-        center_color=config.FACE_CENTER_COLOR,
-        center_radius=config.FACE_CENTER_RADIUS,
-        font=getattr(cv2, config.FONT),
-        font_scale=config.FONT_SCALE,
-        font_color=config.FONT_COLOR,
-        font_thickness=config.FONT_THICKNESS
-    )
-
-    frame_count = 0
-    start_time = time.time()
-    fps = 0
-    process_this_frame = 0
-    faces = []
-
-    print("Face tracking started. Press 'q' to quit.")
-    cv2.namedWindow('Face Tracking', cv2.WINDOW_NORMAL)
-    cv2.resizeWindow('Face Tracking', config.CAMERA_WIDTH, config.CAMERA_HEIGHT)
-
-    retry_count = 0
-    max_retries = 3
-    while True:
-        success, frame = video_capture.read()
-        if not success:
-            retry_count += 1
-            print(f"Error reading frame from video capture (Attempt {retry_count}/{max_retries})")
-            if retry_count >= max_retries:
-                print("Maximum retry attempts reached. Stopping face tracking.")
-                break
-            time.sleep(1)
-            continue
-
-        retry_count = 0
-        frame = cv2.flip(frame, 1)  # Horizontal flip
-
-        if process_this_frame == 0:
-            faces = face_detector.detect_faces(frame, max_faces=args['max_faces'])
-            if config.DEBUG_MODE:
-                print(f"Detected {len(faces)} faces")
-                for i, face in enumerate(faces):
-                    print(f" Face #{i+1}: confidence={face.get('confidence', 'N/A')}, eyes={face.get('eye_count', 'N/A')}")
-
-            if motion_detection and prev_frame is not None:
-                try:
-                    motion_magnitude = detect_motion(prev_frame, frame)
-                    if motion_magnitude is not None:
-                        motion_faces = []
-                        for face in faces:
-                            x, y, w, h = face['rect']
-                            face_motion = np.mean(motion_magnitude[y:y+h, x:x+w])
-                            face['motion'] = face_motion
-                            if face_motion >= config.MOTION_THRESHOLD:
-                                motion_faces.append(face)
-                            elif config.DEBUG_MODE:
-                                print(f"Face rejected by motion: {face_motion} < {config.MOTION_THRESHOLD}")
-                        if config.DEBUG_MODE:
-                            print(f"Motion filtering: {len(faces)} → {len(motion_faces)}")
-                        faces = motion_faces
-                except Exception as e:
-                    if config.DEBUG_MODE:
-                        print(f"Error during motion detection: {e}")
-
-            if motion_detection:
-                prev_frame = frame.copy()
-
-            if temporal_filter is not None:
-                try:
-                    faces = temporal_filter.update(faces)
-                except Exception as e:
-                    if config.DEBUG_MODE:
-                        print(f"Error during temporal filtering: {e}")
-
-        frame_count += 1
-        elapsed_time = time.time() - start_time
-        if elapsed_time >= 1.0:
-            fps = frame_count / elapsed_time
-            frame_count = 0
-            start_time = time.time()
-
-        visualizer.set_fps(fps)
-        output_frame = visualizer.draw_faces(frame, faces)
-
-        cv2.imshow('Face Tracking', output_frame)
-
-        process_this_frame = (process_this_frame + 1) % config.FRAME_SKIP
-
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord('q') or cv2.getWindowProperty('Face Tracking', cv2.WND_PROP_VISIBLE) < 1:
-            break
-
-    video_capture.stop()
-    cv2.destroyAllWindows()
-    print("Face tracking stopped")
+        logger.critical(f"Critical error: {e}")
+        sys.exit(1)
+    finally:
+        logger.info("Face tracking stopped")
 
 if __name__ == '__main__':
     main()
