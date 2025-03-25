@@ -1,124 +1,161 @@
 """
 Face Detection Module
 Author: Romil V. Shah
-This module handles face detection using Haar Cascade classifier.
+This module handles face detection using both DNN and Haar Cascade methods with error recovery.
 """
 
 import cv2
 import numpy as np
 import os
-from typing import List, Tuple, Dict, Optional
+import logging
+from typing import List, Dict, Tuple, Optional
 import config
+from error_handling import retry, ErrorHandler
+
+logger = logging.getLogger(__name__)
 
 class FaceDetector:
     """
-    Class for detecting faces in images using Haar Cascade classifier.
+    Robust face detector with DNN and Haar Cascade fallback.
+    Implements error recovery and hardware acceleration.
     """
-    
-    def __init__(self, cascade_path: str, scale_factor: float = 1.1, 
-                 min_neighbors: int = 5, min_size: Tuple[int, int] = (30, 30)):
-        """
-        Initialize the face detector with the given parameters.
-        """
-        self.face_cascade = cv2.CascadeClassifier()
-        
-        if os.path.isfile(cascade_path):
-            success = self.face_cascade.load(cascade_path)
-            if not success:
-                self._load_from_opencv_data()
-        else:
-            self._load_from_opencv_data(cascade_path)
-            
-        if self.face_cascade.empty():
-            raise ValueError("Error loading cascade classifier. Could not find a valid cascade file.")
-        
-        self.eye_cascade = cv2.CascadeClassifier()
+    def __init__(self, dnn_model_path: str = config.DNN_MODEL_PATH,
+                 dnn_config_path: str = config.DNN_CONFIG_PATH,
+                 confidence_threshold: float = config.DNN_CONFIDENCE_THRESHOLD,
+                 input_size: Tuple[int, int] = config.DNN_INPUT_SIZE,
+                 cascade_path: str = config.CASCADE_PATH,
+                 scale_factor: float = config.SCALE_FACTOR,
+                 min_neighbors: int = config.MIN_NEIGHBORS,
+                 min_size: Tuple[int, int] = config.MIN_SIZE):
+        """Initialize detector with error recovery mechanisms."""
+        self.dnn_initialized = False
+        self.haar_initialized = False
+
         try:
-            eye_cascade_path = cv2.data.haarcascades + 'haarcascade_eye.xml'
-            success = self.eye_cascade.load(eye_cascade_path)
-            if not success:
-                eye_cascade_path = os.path.join(os.path.dirname(cv2.__file__), 'data', 'haarcascades', 'haarcascade_eye.xml')
-                self.eye_cascade.load(eye_cascade_path)
+            self._init_dnn(dnn_model_path, dnn_config_path)
+            self.dnn_initialized = True
         except Exception as e:
-            print(f"Warning: Could not load eye cascade classifier: {e}")
-            print("Face verification using eye detection will be disabled.")
-            
+            logger.error(f"DNN initialization failed: {e}")
+            ErrorHandler.handle_face_detection_error(e)
+
+        try:
+            self._init_haar(cascade_path)
+            self.haar_initialized = True
+        except Exception as e:
+            logger.error(f"Haar Cascade initialization failed: {e}")
+            ErrorHandler.handle_face_detection_error(e)
+
+        if not self.dnn_initialized and not self.haar_initialized:
+            raise RuntimeError("All face detection methods failed to initialize")
+
+        self.confidence_threshold = confidence_threshold
+        self.input_size = input_size
         self.scale_factor = scale_factor
         self.min_neighbors = min_neighbors
         self.min_size = min_size
-    
-    def _load_from_opencv_data(self, filename="haarcascade_frontalface_default.xml"):
-        """
-        Attempts to load the cascade file from OpenCV's data directory.
-        """
-        try:
-            cascade_path = cv2.data.haarcascades + filename
-            if not cascade_path.endswith(".xml"):
-                cascade_path += ".xml"
-            
-            success = self.face_cascade.load(cascade_path)
-            if not success:
-                cascade_path = os.path.join(os.path.dirname(cv2.__file__), 'data', 'haarcascades', filename)
-                if not cascade_path.endswith(".xml"):
-                    cascade_path += ".xml"
-                success = self.face_cascade.load(cascade_path)
-        except AttributeError:
-            cascade_path = os.path.join(os.path.dirname(cv2.__file__), 'data', 'haarcascades', filename)
-            if not cascade_path.endswith(".xml"):
-                cascade_path += ".xml"
-            success = self.face_cascade.load(cascade_path)
-    
-    def _verify_face_geometry(self, face_rect):
-        """
-        Verify if the face has reasonable geometric properties.
-        """
-        x, y, w, h = face_rect
+
+    @retry(max_attempts=3, delay=1, allowed_exceptions=(Exception,))
+    def _init_dnn(self, model_path: str, config_path: str):
+        """Initialize DNN detector with proper backend validation"""
+        if not os.path.exists(model_path) or not os.path.exists(config_path):
+            raise FileNotFoundError(f"DNN model files missing: {model_path}, {config_path}")
+
+        self.net = cv2.dnn.readNet(model_path, config_path)
         
-        aspect_ratio = w / h
-        if aspect_ratio < config.FACE_ASPECT_RATIO_MIN or aspect_ratio > config.FACE_ASPECT_RATIO_MAX:
-            if config.DEBUG_MODE:
-                print(f"Face rejected: aspect ratio {aspect_ratio:.2f} outside range [{config.FACE_ASPECT_RATIO_MIN}, {config.FACE_ASPECT_RATIO_MAX}]")
-            return False
-            
-        if w < self.min_size[0] or h < self.min_size[1]:
-            if config.DEBUG_MODE:
-                print(f"Face rejected: size {w}x{h} smaller than minimum {self.min_size[0]}x{self.min_size[1]}")
-            return False
-            
-        return True
-    
-    def calculate_confidence(self, face_info, eye_count):
-        """
-        Calculate a confidence score for face detection.
-        """
-        confidence = 0.5  # Base confidence
+        # Get available backends and targets
+        available_backends = getattr(cv2.dnn, 'getAvailableBackends', lambda: [])()
         
-        if eye_count > 0:
-            confidence += 0.3
-        if eye_count > 1:
-            confidence += 0.1
-            
-        x, y, w, h = face_info['rect']
-        aspect_ratio = w / h
-        if config.FACE_ASPECT_RATIO_MIN <= aspect_ratio <= config.FACE_ASPECT_RATIO_MAX:
-            confidence += 0.1
-            
-        return min(confidence, 1.0)
-    
-    def detect_faces(self, frame: np.ndarray, max_faces: int = None) -> List[Dict[str, any]]:
-        """
-        Detect faces in the given frame.
-        """
-        if config.DEBUG_MODE:
-            print("Starting face detection...")
+        if cv2.dnn.DNN_BACKEND_CUDA in available_backends:
+            cuda_targets = getattr(cv2.dnn, 'getAvailableTargets', lambda x: [])(cv2.dnn.DNN_BACKEND_CUDA)
+            if cv2.dnn.DNN_TARGET_CUDA in cuda_targets:
+                self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+                self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+                logger.info("CUDA acceleration enabled")
+                return
         
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        
+        # Fallback to OpenCV CPU backend
+        self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
+        self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
+        logger.info("Using CPU fallback")
+
+    @retry(max_attempts=3, delay=1, allowed_exceptions=(Exception,))
+    def _init_haar(self, cascade_path: str):
+        """Initialize Haar Cascade classifier with retry logic."""
+        if not os.path.exists(cascade_path):
+            raise FileNotFoundError(f"Haar Cascade file missing: {cascade_path}")
+
+        self.face_cascade = cv2.CascadeClassifier(cascade_path)
         if self.face_cascade.empty():
-            print("Warning: Face cascade is empty. Face detection will not work.")
-            return []
+            raise RuntimeError("Loaded empty Haar Cascade classifier")
+
+    def _validate_frame(self, frame: np.ndarray) -> bool:
+        """Validate input frame dimensions and type."""
+        if frame is None or frame.size == 0:
+            logger.error("Received invalid frame (empty or None)")
+            return False
+        if len(frame.shape) != 3 or frame.shape[2] != 3:
+            logger.error("Invalid frame format, expected 3-channel BGR image")
+            return False
+        return True
+
+    def _process_dnn_detections(self, detections: np.ndarray, frame_shape: Tuple[int, int]) -> List[Dict]:
+        """Process raw DNN detections into face dictionaries."""
+        height, width = frame_shape
+        faces = []
         
+        for i in range(detections.shape[2]):
+            confidence = detections[0, 0, i, 2]
+            if confidence < self.confidence_threshold:
+                continue
+
+            # Ensure bounding box coordinates are within frame bounds
+            x1 = max(0, min(int(detections[0, 0, i, 3] * width), width - 1))
+            y1 = max(0, min(int(detections[0, 0, i, 4] * height), height - 1))
+            x2 = max(0, min(int(detections[0, 0, i, 5] * width), width - 1))
+            y2 = max(0, min(int(detections[0, 0, i, 6] * height), height - 1))
+            
+            w = x2 - x1
+            h = y2 - y1
+            if w <= 0 or h <= 0:
+                continue  # Skip invalid boxes
+
+            faces.append({
+                'rect': (x1, y1, w, h),
+                'center': ((x1 + x2) // 2, (y1 + y2) // 2),
+                'confidence': float(confidence),
+                'area': w * h
+            })
+        return faces
+
+    def detect_faces_dnn(self, frame: np.ndarray) -> List[Dict]:
+        """Perform DNN-based face detection with error recovery."""
+        if not self.dnn_initialized or not self._validate_frame(frame):
+            return []
+
         try:
+            blob = cv2.dnn.blobFromImage(
+                frame,
+                scalefactor=1.0,
+                size=self.input_size,
+                mean=(104.0, 177.0, 123.0),
+                swapRB=False
+            )
+            self.net.setInput(blob)
+            detections = self.net.forward()
+            return self._process_dnn_detections(detections, frame.shape[:2])
+        except Exception as e:
+            logger.error(f"DNN detection failed: {e}")
+            ErrorHandler.handle_face_detection_error(e)
+            self.dnn_initialized = False  # Disable DNN for subsequent frames
+            return []
+
+    def detect_faces_haar(self, frame: np.ndarray) -> List[Dict]:
+        """Perform Haar Cascade-based face detection with fallback."""
+        if not self.haar_initialized or not self._validate_frame(frame):
+            return []
+
+        try:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             faces = self.face_cascade.detectMultiScale(
                 gray,
                 scaleFactor=self.scale_factor,
@@ -126,82 +163,59 @@ class FaceDetector:
                 minSize=self.min_size,
                 flags=cv2.CASCADE_SCALE_IMAGE
             )
-            
-            if config.DEBUG_MODE:
-                print(f"Initial face detection found {len(faces)} faces")
-                
-        except Exception as e:
-            print(f"Error during face detection: {e}")
-            return []
-        
-        if len(faces) == 0:
-            return []
-            
-        face_info = []
-        for (x, y, w, h) in faces:
-            center_x = x + w // 2
-            center_y = y + h // 2
-            area = w * h
-            
-            face_info.append({
+            return [{
                 'rect': (x, y, w, h),
-                'center': (center_x, center_y),
-                'area': area,
-                'confidence': 0.5  # Default confidence
-            })
+                'center': (x + w//2, y + h//2),
+                'confidence': 0.5,
+                'area': w * h
+            } for (x, y, w, h) in faces]
+        except Exception as e:
+            logger.error(f"Haar Cascade detection failed: {e}")
+            ErrorHandler.handle_face_detection_error(e)
+            self.haar_initialized = False  # Disable Haar for subsequent frames
+            return []
+
+    def detect_faces(self, frame: np.ndarray, max_faces: int = None) -> List[Dict]:
+        """Main detection method with automatic fallback and result validation."""
+        if not self._validate_frame(frame):
+            return []
+
+        # Try DNN first if available
+        faces = []
+        if self.dnn_initialized:
+            faces = self.detect_faces_dnn(frame)
+            if not faces and config.DEBUG_MODE:
+                logger.info("DNN detected no faces, trying Haar Cascade")
+
+        # Fallback to Haar Cascade if needed
+        if not faces and self.haar_initialized:
+            faces = self.detect_faces_haar(frame)
+
+        # Post-processing
+        valid_faces = [f for f in faces if self._validate_face(f, frame.shape)]
         
-        verified_face_info = []
-        
-        if not self.eye_cascade.empty() and config.EYE_DETECTION_ENABLED:
-            for face in face_info:
-                x, y, w, h = face['rect']
-                
-                if not self._verify_face_geometry(face['rect']):
-                    if config.DEBUG_MODE:
-                        print(f"Face at {face['rect']} rejected by geometry check")
-                    continue
-                
-                roi_gray = gray[y:y+h, x:x+w]
-                
-                try:
-                    eyes = self.eye_cascade.detectMultiScale(
-                        roi_gray,
-                        scaleFactor=config.EYE_SCALE_FACTOR,
-                        minNeighbors=config.EYE_MIN_NEIGHBORS,
-                        minSize=config.EYE_MIN_SIZE
-                    )
-                    
-                    confidence = self.calculate_confidence(face, len(eyes))
-                    face['confidence'] = confidence
-                    face['eye_count'] = len(eyes)
-                    
-                    if config.DEBUG_MODE:
-                        print(f"Face at {face['rect']} has {len(eyes)} eyes, confidence: {confidence:.2f}")
-                    
-                    verified_face_info.append(face)
-                    
-                except Exception as e:
-                    if config.DEBUG_MODE:
-                        print(f"Error during eye detection: {e}")
-                    face['confidence'] = 0.5
-                    face['eye_count'] = 0
-                    verified_face_info.append(face)
-        else:
-            for face in face_info:
-                if self._verify_face_geometry(face['rect']):
-                    face['confidence'] = 0.5
-                    face['eye_count'] = 0
-                    verified_face_info.append(face)
-        
-        if config.DEBUG_MODE:
-            print(f"After verification: {len(verified_face_info)} faces remain")
-            
-        verified_face_info.sort(key=lambda x: (x['confidence'], x['area']), reverse=True)
-        
+        # Sort and limit results
+        valid_faces.sort(key=lambda x: (x['confidence'], x['area']), reverse=True)
         if config.MINIMUM_CONFIDENCE > 0:
-            verified_face_info = [f for f in verified_face_info if f['confidence'] >= config.MINIMUM_CONFIDENCE]
-        
-        if max_faces is not None and max_faces > 0:
-            verified_face_info = verified_face_info[:max_faces]
-            
-        return verified_face_info
+            valid_faces = [f for f in valid_faces if f['confidence'] >= config.MINIMUM_CONFIDENCE]
+        if max_faces and max_faces > 0:
+            valid_faces = valid_faces[:max_faces]
+
+        return valid_faces
+
+    def _validate_face(self, face: Dict, frame_shape: Tuple[int, ...]) -> bool:
+        """Validate detected face coordinates and properties."""
+        x, y, w, h = face['rect']
+        img_h, img_w = frame_shape[:2]
+        return (x >= 0 and y >= 0 and
+                x + w <= img_w and
+                y + h <= img_h and
+                w >= self.min_size[0] and
+                h >= self.min_size[1])
+
+    def __del__(self):
+        """Cleanup resources."""
+        if hasattr(self, 'net'):
+            del self.net
+        if hasattr(self, 'face_cascade'):
+            del self.face_cascade
