@@ -54,6 +54,9 @@ TEMPORAL_FRAMES_HISTORY = 5
 TEMPORAL_CONSISTENCY = 2 # Allow brief tracking gaps
 TEMPORAL_CONSISTENCY_THRESHOLD = 2 # Must match TEMPORAL_CONSISTENCY value
 
+# Temporal filtering safeguards
+TEMPORAL_MIN_TIME_DIFF = 0.001  # 1 millisecond minimum
+TEMPORAL_MAX_TIME_DIFF = 1.0    # 1 second maximum
 # Motion detection
 MOTION_DETECTION_ENABLED = False
 MOTION_THRESHOLD = 5.0
