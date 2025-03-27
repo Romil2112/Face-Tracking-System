@@ -1,17 +1,14 @@
-#Face Tracking System
-Robust Real-Time Face Detection and Tracking with Advanced Error Recovery
-
-![System Architecture Diagram](https://via.placeholder.com/800x400.png?text=Face+Tracking+System+Architectview
-This comprehensive face tracking system combines traditional computer vision techniques with deep learning to achieve robust real-time performance. The implementation emphasizes error resilience, hardware acceleration support, and adaptive resource management, making it suitable for deployment across diverse environments
-
 # Face Tracking Application
+This comprehensive face tracking system combines traditional computer vision techniques with deep learning to achieve robust real-time performance. The implementation emphasizes error resilience, hardware acceleration support, and adaptive resource management, making it suitable for deployment across diverse environments.
 
-## Features
-- Real-time face detection and tracking
-- Eye detection for improved face verification
-- Temporal filtering to reduce false positives
-- Motion detection capabilities
-- Customizable visualization
+## Key Features
+Dual Detection Architecture: Hybrid approach using DNN (ResNet-SSD) and Haar Cascade classifiers with automatic fallback
+Temporal Filtering: Motion prediction and consistency tracking across frames (5-frame history)
+Hardware Acceleration: CUDA/OpenCL support with automatic backend selection
+Circuit Breaker Pattern: Stateful error recovery for camera, detection, and resource subsystems
+Dynamic Resource Management: Automatic frame skipping and load reduction during resource exhaustion
+Non-Maximum Suppression: Hybrid OpenCV/manual IOU filtering with 0.4 threshold
+Visualization System: Bounding box annotation with confidence scores and motion vectors
 
 ## Configuration
 You can modify various parameters in the `config.py` file to adjust the application's behavior.
@@ -19,12 +16,18 @@ You can modify various parameters in the `config.py` file to adjust the applicat
 ## License
 This project is licensed under the terms of the LICENSE file included in this repository.
 
-## Contributing
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-This application performs real-time face tracking using OpenCV and Haar Cascades.
+## Contributors
+- **Romil V. Shah** - Lead Developer ([LinkedIn](https://linkedin.com/in/romil2112))
+- **Parshav A. Shah** - Assistant Developer ([GitHub](https://github.com/pshah0601) | [LinkedIn](https://www.linkedin.com/in/parshav-shah6102))
 
 ## Installation
+
+Prerequisites
+- Python 3.8+
+- OpenCV 4.5+ with contrib modules
+- CUDA Toolkit 11.0+ (optional)
+- NVIDIA GPU with Compute Capability 3.0+ (for CUDA acceleration)
+
 1. Clone this repository:
 git clone https://github.com/yourusername/face-tracking-app.git
 cd face-tracking-app
@@ -52,3 +55,12 @@ Optional command-line arguments:
 - `--min-neighbors`: Min neighbors for face detection
 - `--max-faces`: Maximum number of faces to track
 - `--debug`: Enable debug output
+
+## Error Recovery System:
+Three-tier fault tolerance mechanism:
+1. Retry Decorator: Exponential backoff with jitter (3 attempts)
+2. Circuit Breakers: State tracking for camera/detector subsystems
+3. Graceful Degradation:
+  - Dynamic frame skipping
+  - Model complexity reduction
+  - CUDA → CPU fallback
