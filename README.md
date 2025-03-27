@@ -2,13 +2,13 @@
 This comprehensive face tracking system combines traditional computer vision techniques with deep learning to achieve robust real-time performance. The implementation emphasizes error resilience, hardware acceleration support, and adaptive resource management, making it suitable for deployment across diverse environments.
 
 ## Key Features
-Dual Detection Architecture: Hybrid approach using DNN (ResNet-SSD) and Haar Cascade classifiers with automatic fallback
-Temporal Filtering: Motion prediction and consistency tracking across frames (5-frame history)
-Hardware Acceleration: CUDA/OpenCL support with automatic backend selection
-Circuit Breaker Pattern: Stateful error recovery for camera, detection, and resource subsystems
-Dynamic Resource Management: Automatic frame skipping and load reduction during resource exhaustion
-Non-Maximum Suppression: Hybrid OpenCV/manual IOU filtering with 0.4 threshold
-Visualization System: Bounding box annotation with confidence scores and motion vectors
+- Dual Detection Architecture: Hybrid approach using DNN (ResNet-SSD) and Haar Cascade classifiers with automatic fallback
+- Temporal Filtering: Motion prediction and consistency tracking across frames (5-frame history)
+- Hardware Acceleration: CUDA/OpenCL support with automatic backend selection
+- Circuit Breaker Pattern: Stateful error recovery for camera, detection, and resource subsystems
+- Dynamic Resource Management: Automatic frame skipping and load reduction during resource exhaustion
+- Non-Maximum Suppression: Hybrid OpenCV/manual IOU filtering with 0.4 threshold
+- Visualization System: Bounding box annotation with confidence scores and motion vectors
 
 ## Configuration
 You can modify various parameters in the `config.py` file to adjust the application's behavior.
