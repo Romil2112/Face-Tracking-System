@@ -9,6 +9,8 @@
 
 This comprehensive face tracking system combines traditional computer vision techniques with deep learning to achieve robust real-time performance. The implementation emphasizes error resilience, hardware acceleration support, and adaptive resource management, making it suitable for deployment across diverse environments. Built for stability rather than cutting-edge performance, it prioritizes error recovery over maximizing detection accuracy.
 
+It runs three ways: as a **live webcam tracker**, a **headless CLI** over image/video files, or a **REST API microservice** (FastAPI + Docker) — all backed by a pytest + GitHub Actions CI suite.
+
 ## Contributors
 - **Romil V. Shah** - Lead Developer ([LinkedIn](https://linkedin.com/in/romil2112))
 - **Parshav A. Shah** - Assistant Developer ([GitHub](https://github.com/pshah0601) | [LinkedIn](https://www.linkedin.com/in/parshav-shah6102))
@@ -18,6 +20,9 @@ This comprehensive face tracking system combines traditional computer vision tec
 ## Table of Contents
 - [Key Features](#key-features)
 - [Skills Demonstrated](#skills-demonstrated)
+- [REST API](#rest-api)
+- [Headless CLI](#headless-cli)
+- [Docker](#docker)
 - [Technical Architecture](#technical-architecture)
 - [System Requirements](#system-requirements)
 - [Installation](#installation)
@@ -58,6 +63,47 @@ This comprehensive face tracking system combines traditional computer vision tec
 | Fault Tolerance | Three-stage recovery (CUDA OOM → CPU, camera timeout → reset, model corruption → cache restore), circuit breakers, and retry with exponential backoff + jitter |
 | Hardware Acceleration | CUDA/OpenCL backend auto-selection with graceful CPU degradation and health monitoring |
 | Software Engineering | Modular architecture (detection, capture, temporal filtering, error handling, visualization), centralized config, and a CLI argument interface |
+| Backend / REST API | FastAPI service exposing `POST /detect` (image upload → JSON faces) and `GET /health`, decoding images in-memory with OpenCV |
+| Containerization | Dockerfile packaging the detection service for headless deployment (`docker build` → `uvicorn`) |
+| Testing / CI | 42 pytest unit/integration tests (detection logic, NMS, temporal filtering, circuit breakers, REST API) run on Python 3.10–3.12 via GitHub Actions |
+
+## REST API
+
+Run the detector as a headless HTTP service (no camera or display required):
+
+```bash
+pip install -r requirements-api.txt
+uvicorn src.api:app --host 0.0.0.0 --port 8000
+```
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET`  | `/health` | Liveness probe → `{"status": "ok"}` |
+| `POST` | `/detect` | Multipart image upload → `{"count": N, "faces": [{rect, center, confidence}]}` |
+
+```bash
+curl -X POST http://localhost:8000/detect -F "file=@face.jpg"
+# {"count": 1, "faces": [{"rect": [120, 80, 90, 90], "center": [165, 125], "confidence": 0.99}]}
+```
+
+Interactive docs are auto-generated at `http://localhost:8000/docs`.
+
+## Headless CLI
+
+Process an image or video file directly, with no webcam:
+
+```bash
+python src/cli_detect.py --image face.jpg --json            # print detections as JSON
+python src/cli_detect.py --image face.jpg --out annotated.jpg   # write an annotated image
+python src/cli_detect.py --video clip.mp4 --json            # per-frame detection counts
+```
+
+## Docker
+
+```bash
+docker build -t face-detection-api .
+docker run -p 8000:8000 face-detection-api
+```
 
 ## Technical Architecture
 ### Core Components

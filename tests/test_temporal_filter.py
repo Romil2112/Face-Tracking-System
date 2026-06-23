@@ -50,16 +50,28 @@ def test_update_rejects_non_list_input(tf):
     assert tf.update("not-a-list", timedelta(milliseconds=33)) == []
 
 
-def test_update_passes_face_meeting_consistency_threshold(tf):
-    # consistency_threshold=2 is satisfied by a confirmed sighting.
+def test_update_first_sighting_not_yet_consistent(tf):
+    # consistency_threshold=2: a single frame cannot be confirmed yet.
     out = tf.update([make_face((0, 0, 20, 20))], timedelta(milliseconds=33))
+    assert out == []
+
+
+def test_update_promotes_face_after_repeated_consistent_sightings(tf):
+    rect = (0, 0, 20, 20)
+    dt = timedelta(milliseconds=33)
+    assert tf.update([make_face(rect)], dt) == []        # frame 1: consistency 1
+    out = tf.update([make_face(rect)], dt)               # frame 2: consistency 2 -> passes
     assert len(out) == 1
     assert out[0]["consistency"] >= 2
 
 
 def test_update_filters_face_below_consistency_threshold():
     strict = TemporalFilter(history_size=5, consistency_threshold=3)
-    assert strict.update([make_face((0, 0, 20, 20))], timedelta(milliseconds=33)) == []
+    rect = (0, 0, 20, 20)
+    dt = timedelta(milliseconds=33)
+    # Even two consistent sightings only reach consistency 2, below the threshold of 3.
+    strict.update([make_face(rect)], dt)
+    assert strict.update([make_face(rect)], dt) == []
 
 
 def test_reset_clears_history(tf):

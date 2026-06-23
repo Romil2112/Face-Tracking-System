@@ -125,14 +125,13 @@ class TemporalFilter:
                 motion_vector = self._calculate_motion(valid_faces, time_diff)
                 valid_faces = self._apply_motion_prediction(valid_faces, motion_vector, time_diff)
 
+            # Compare against the PREVIOUS frame (history[-1] is the frame we just
+            # appended), so a face's consistency count accumulates across frames.
+            prev_faces = self.face_history[-2] if len(self.face_history) >= 2 else []
             for face in valid_faces:
-                if not self.face_history:
-                    face['consistency'] = 1
-                    continue
-
-                matches = self._match_faces([face], self.face_history[-1])
+                matches = self._match_faces([face], prev_faces)
                 if matches and matches[0] != -1:
-                    face['consistency'] = self.face_history[-1][matches[0]].get('consistency', 1) + 1
+                    face['consistency'] = prev_faces[matches[0]].get('consistency', 1) + 1
                 else:
                     face['consistency'] = 1
 

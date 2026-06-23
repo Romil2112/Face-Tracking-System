@@ -29,6 +29,7 @@ class FaceDetector:
                  min_neighbors: int = config.MIN_NEIGHBORS,
                  min_size: Tuple[int, int] = config.MIN_SIZE):
         """Initialize detector with error recovery mechanisms."""
+        self._error_handler = ErrorHandler()
         self.dnn_initialized = False
         self.haar_initialized = False
         try:
@@ -36,13 +37,13 @@ class FaceDetector:
             self.dnn_initialized = True
         except Exception as e:
             logger.error(f"DNN initialization failed: {e}")
-            ErrorHandler.handle_face_detection_error(e)
+            self._error_handler.handle_face_detection_error(e)
         try:
             self._init_haar(cascade_path)
             self.haar_initialized = True
         except Exception as e:
             logger.error(f"Haar Cascade initialization failed: {e}")
-            ErrorHandler.handle_face_detection_error(e)
+            self._error_handler.handle_face_detection_error(e)
         if not self.dnn_initialized and not self.haar_initialized:
             raise RuntimeError("All face detection methods failed to initialize")
         self.confidence_threshold = confidence_threshold
@@ -132,7 +133,7 @@ class FaceDetector:
             return self._process_dnn_detections(detections, frame.shape[:2])
         except Exception as e:
             logger.error(f"DNN detection failed: {e}")
-            ErrorHandler.handle_face_detection_error(e)
+            self._error_handler.handle_face_detection_error(e)
             self.dnn_initialized = False  # Disable DNN for subsequent frames
             return []
 
@@ -157,7 +158,7 @@ class FaceDetector:
             } for (x, y, w, h) in faces]
         except Exception as e:
             logger.error(f"Haar Cascade detection failed: {e}")
-            ErrorHandler.handle_face_detection_error(e)
+            self._error_handler.handle_face_detection_error(e)
             self.haar_initialized = False  # Disable Haar for subsequent frames
             return []
 
