@@ -1,8 +1,8 @@
 # Real-Time Face Tracking System
 
-![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)
-![License](https://img.shields.io/badge/license-Apache%202.0-green)
-![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
+![Python Version](https://img.shields.io/badge/python-3.8%2B-blue?logo=python&logoColor=white)
+![OpenCV](https://img.shields.io/badge/OpenCV-4.5%2B-orange?logo=opencv&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-green?logo=opensourceinitiative&logoColor=white)
 
 **Robust Real-Time Face Detection and Tracking with Advanced Error Recovery**
 
@@ -16,6 +16,7 @@ This comprehensive face tracking system combines traditional computer vision tec
 
 ## Table of Contents
 - [Key Features](#key-features)
+- [Skills Demonstrated](#skills-demonstrated)
 - [Technical Architecture](#technical-architecture)
 - [System Requirements](#system-requirements)
 - [Installation](#installation)
@@ -46,6 +47,16 @@ This comprehensive face tracking system combines traditional computer vision tec
   3. Model corruption → Local cache restoration from embedded weights
 - Circuit breakers for critical subsystems
 - Graceful degradation under load
+
+## Skills Demonstrated
+
+| Area | Details |
+|---|---|
+| Real-Time Systems | Frame-by-frame processing pipeline with dynamic 1–5 frame skipping and adaptive resource management to hold real-time FPS under load |
+| Computer Vision / Deep Learning | Hybrid detector — ResNet-SSD (300×300) DNN with Haar Cascade fallback, Non-Maximum Suppression, and optical-flow motion analysis |
+| Fault Tolerance | Three-stage recovery (CUDA OOM → CPU, camera timeout → reset, model corruption → cache restore), circuit breakers, and retry with exponential backoff + jitter |
+| Hardware Acceleration | CUDA/OpenCL backend auto-selection with graceful CPU degradation and health monitoring |
+| Software Engineering | Modular architecture (detection, capture, temporal filtering, error handling, visualization), centralized config, and a CLI argument interface |
 
 ## Technical Architecture
 ### Core Components
@@ -87,8 +98,8 @@ Prerequisites
 - NVIDIA GPU with Compute Capability 3.0+ (for CUDA acceleration)
 
 1. Clone this repository:
-git clone https://github.com/yourusername/face-tracking-app.git
-cd face-tracking-app
+git clone https://github.com/Romil2112/Face-Tracking-System.git
+cd Face-Tracking-System
 
 2. Install the required dependencies:
 pip install -r requirements.txt
@@ -97,8 +108,8 @@ pip install -r requirements.txt
 
 ## Quick Start
 
-1. git clone https://github.com/yourusername/face-tracking-app.git
-2. cd face-tracking-app
+1. git clone https://github.com/Romil2112/Face-Tracking-System.git
+2. cd Face-Tracking-System
 3. pip install -r requirements.txt
 4. python src/main.py --width 800 --height 600
 
