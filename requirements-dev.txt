@@ -1,0 +1,4 @@
+# Test/CI dependencies (headless OpenCV - no GUI libraries needed on CI runners)
+opencv-python-headless>=4.5.0
+numpy>=1.20.0
+pytest>=7.0

@@ -1,5 +1,6 @@
 # Real-Time Face Tracking System
 
+![CI](https://github.com/Romil2112/Face-Tracking-System/actions/workflows/ci.yml/badge.svg)
 ![Python Version](https://img.shields.io/badge/python-3.8%2B-blue?logo=python&logoColor=white)
 ![OpenCV](https://img.shields.io/badge/OpenCV-4.5%2B-orange?logo=opencv&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green?logo=opensourceinitiative&logoColor=white)
