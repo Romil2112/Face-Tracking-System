@@ -42,13 +42,16 @@ It runs three ways: as a **live webcam tracker**, a **headless CLI** over image/
 - Temporal consistency validation: 5-frame buffer to confirm face presence before updating tracking coordinates
 
 ### Hardware Optimization
-- CUDA/OpenCL acceleration with automatic backend selection
+- Automatic backend selection walks `CUDA → OpenCL → CPU` and picks the first available accelerator
+- **CUDA** uses the dedicated `cv2.dnn` CUDA backend (NVIDIA GPUs)
+- **OpenCL** uses the OpenCV T-API (`cv2.UMat`) so DNN inference, colour conversion, and Haar detection run on the GPU on any OpenCL device (Intel / AMD / Apple)
+- **CPU** is the always-available fallback
 - Dynamic resource management (1-5 frame skip)
 - Memory-optimized processing pipeline
 
 ### Fault Tolerance
 - Three-stage error recovery system:
-  1. CUDA memory exhaustion → Automatic CPU fallback
+  1. GPU memory exhaustion / CUDA unavailable → fall through `CUDA → OpenCL → CPU`
   2. Camera timeout → Hardware reset via USB power cycle emulation
   3. Model corruption → Local cache restoration from embedded weights
 - Circuit breakers for critical subsystems
@@ -61,11 +64,11 @@ It runs three ways: as a **live webcam tracker**, a **headless CLI** over image/
 | Real-Time Systems | Frame-by-frame processing pipeline with dynamic 1–5 frame skipping and adaptive resource management to hold real-time FPS under load |
 | Computer Vision / Deep Learning | Hybrid detector — ResNet-SSD (300×300) DNN with Haar Cascade fallback, Non-Maximum Suppression, and optical-flow motion analysis |
 | Fault Tolerance | Three-stage recovery (CUDA OOM → CPU, camera timeout → reset, model corruption → cache restore), circuit breakers, and retry with exponential backoff + jitter |
-| Hardware Acceleration | CUDA/OpenCL backend auto-selection with graceful CPU degradation and health monitoring |
+| Hardware Acceleration | `CUDA → OpenCL → CPU` backend auto-selection driven by a pure, unit-tested priority resolver; OpenCL path uses the OpenCV T-API (`cv2.UMat`) for GPU offload, with graceful CPU degradation |
 | Software Engineering | Modular architecture (detection, capture, temporal filtering, error handling, visualization), centralized config, and a CLI argument interface |
 | Backend / REST API | FastAPI service exposing `POST /detect` (image upload → JSON faces) and `GET /health`, decoding images in-memory with OpenCV |
 | Containerization | Dockerfile packaging the detection service for headless deployment (`docker build` → `uvicorn`) |
-| Testing / CI | 42 pytest unit/integration tests (detection logic, NMS, temporal filtering, circuit breakers, REST API) run on Python 3.10–3.12 via GitHub Actions |
+| Testing / CI | 51 pytest unit/integration tests (detection logic, NMS, temporal filtering, circuit breakers, REST API, acceleration selection) run on Python 3.10–3.12 via GitHub Actions |
 
 ## REST API
 
@@ -114,6 +117,7 @@ docker run -p 8000:8000 face-detection-api
 └── src/    
 * ├── main.py                     # Main application entry point
 * ├── face_detector.py           # Hybrid DNN + Haar Cascade detection
+* ├── acceleration.py            # CUDA → OpenCL (T-API) → CPU backend selection
 * ├── video_capture.py           # Camera interface with error recovery
 * ├── temporal_filter.py         # 5-frame temporal consistency checks
 * ├── error_handling.py          # Circuit breakers & recovery system
@@ -141,8 +145,9 @@ docker run -p 8000:8000 face-detection-api
 Prerequisites
 - Python 3.8+
 - OpenCV 4.5+ with contrib modules
-- CUDA Toolkit 11.0+ (optional)
-- NVIDIA GPU with Compute Capability 3.0+ (for CUDA acceleration)
+- CUDA Toolkit 11.0+ + NVIDIA GPU (optional — for the CUDA backend)
+- Any OpenCL device — Intel / AMD / Apple GPU (optional — for the OpenCL/T-API backend; no NVIDIA required)
+- Neither is required: the system falls back to CPU automatically
 
 1. Clone this repository:
 git clone https://github.com/Romil2112/Face-Tracking-System.git

@@ -73,5 +73,8 @@ DEBUG_MODE = True
 # NMS
 NMS_THRESHOLD = 0.4
 
-# Acceleration priority
-ACCELERATION_PRIORITY = ["CUDA", "CPU"]  # Explicitly exclude OpenCL
+# Acceleration priority: first available wins.
+#   CUDA   -> dedicated cv2.dnn CUDA backend (NVIDIA GPUs)
+#   OpenCL -> OpenCV T-API (cv2.UMat) on any OpenCL device (Intel/AMD/Apple GPUs)
+#   CPU    -> always-available fallback
+ACCELERATION_PRIORITY = ["CUDA", "OpenCL", "CPU"]

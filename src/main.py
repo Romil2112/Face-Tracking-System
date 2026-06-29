@@ -20,16 +20,19 @@ from video_capture import VideoCapture
 from tracking_visualizer import TrackingVisualizer
 from error_handling import retry, ErrorHandler
 from nms_utils import apply_nms
+import acceleration
 import config
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configure environment for optimal performance
-os.environ["OPENCV_OCL4DNN_CONFIG_PATH"] = "/tmp/ocl_cache"  # Linux/macOS
-os.environ["OPENCV_OPENCL_DEVICE"] = "AMD:GPU"  # Force specific device
-os.environ["OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS"] = "0"
+# Configure environment for optimal performance. Defaults only (setdefault) so
+# the user can override the OpenCL device; prefer any GPU rather than pinning a
+# specific vendor.
+os.environ.setdefault("OPENCV_OCL4DNN_CONFIG_PATH", "/tmp/ocl_cache")
+os.environ.setdefault("OPENCV_OPENCL_DEVICE", ":GPU:0")  # any platform, first GPU
+os.environ.setdefault("OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS", "0")
 
 def parse_arguments() -> Dict[str, Any]:
     """Parse command line arguments."""
@@ -61,20 +64,18 @@ def initialize_video_capture(camera_index: int, width: int, height: int, fps: in
     return video_capture
 
 def verify_acceleration():
-    """Validate hardware acceleration availability"""
+    """Report the acceleration that will actually be used (CUDA/OpenCL/CPU).
+
+    Returns True when a GPU path (CUDA or OpenCL) is selected, False for CPU.
+    """
     try:
-        if cv2.cuda.getCudaEnabledDeviceCount() > 0:
-            cuda_backend = getattr(cv2.dnn, 'DNN_BACKEND_CUDA', cv2.dnn.DNN_BACKEND_OPENCV)
-            available_targets = getattr(cv2.dnn, 'getAvailableTargets', lambda x: [])(cuda_backend)
-            if getattr(cv2.dnn, 'DNN_TARGET_CUDA', None) not in available_targets:
-                logger.warning(f"CUDA targets unavailable for backend {cuda_backend}")
-            logger.info(f"CUDA acceleration available (Targets: {available_targets})")
-            return True
-        else:
-            cpu_backend = cv2.dnn.DNN_BACKEND_OPENCV
-            available_targets = getattr(cv2.dnn, 'getAvailableTargets', lambda x: [])(cpu_backend)
-            logger.info(f"CPU acceleration active (Available targets: {available_targets})")
-            return False
+        caps = acceleration.probe_capabilities()
+        accel = acceleration.select_acceleration(caps=caps)
+        logger.info(
+            "Acceleration selected: %s (CUDA available=%s, OpenCL available=%s)",
+            accel.name, caps["cuda"], caps["opencl"],
+        )
+        return accel.name in (acceleration.CUDA, acceleration.OPENCL)
     except Exception as e:
         logger.error(f"Acceleration verification failed: {str(e)}")
         return False

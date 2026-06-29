@@ -10,6 +10,7 @@ import os
 import logging
 from typing import List, Dict, Tuple, Optional
 import config
+import acceleration
 from error_handling import retry, ErrorHandler
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,8 @@ class FaceDetector:
         self._error_handler = ErrorHandler()
         self.dnn_initialized = False
         self.haar_initialized = False
+        # Resolved at DNN init; governs whether the T-API (OpenCL) path is used.
+        self.acceleration = None
         try:
             self._init_dnn(dnn_model_path, dnn_config_path)
             self.dnn_initialized = True
@@ -58,19 +61,11 @@ class FaceDetector:
         if not os.path.exists(model_path) or not os.path.exists(config_path):
             raise FileNotFoundError(f"DNN model files missing: {model_path}, {config_path}")
         self.net = cv2.dnn.readNet(model_path, config_path)
-        # Get available backends and targets
-        available_backends = getattr(cv2.dnn, 'getAvailableBackends', lambda: [])()
-        if cv2.dnn.DNN_BACKEND_CUDA in available_backends:
-            cuda_targets = getattr(cv2.dnn, 'getAvailableTargets', lambda x: [])(cv2.dnn.DNN_BACKEND_CUDA)
-            if cv2.dnn.DNN_TARGET_CUDA in cuda_targets:
-                self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
-                self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
-                logger.info("CUDA acceleration enabled")
-                return
-        # Fallback to OpenCV CPU backend
-        self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
-        self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
-        logger.info("Using CPU fallback")
+        # Pick CUDA -> OpenCL (T-API) -> CPU per config.ACCELERATION_PRIORITY and
+        # wire the chosen backend/target into the network.
+        self.acceleration = acceleration.apply_to_net(
+            self.net, acceleration.select_acceleration()
+        )
 
     @retry(max_attempts=3, delay=1, allowed_exceptions=(Exception,))
     def _init_haar(self, cascade_path: str):
@@ -142,7 +137,10 @@ class FaceDetector:
         if not self.haar_initialized or not self._validate_frame(frame):
             return []
         try:
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            # When OpenCL is the active backend, run colour conversion and the
+            # cascade on the GPU via the T-API (cv2.UMat); otherwise a no-op.
+            src = acceleration.to_umat(frame, self.acceleration)
+            gray = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
             faces = self.face_cascade.detectMultiScale(
                 gray,
                 scaleFactor=self.scale_factor,
