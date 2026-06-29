@@ -1,7 +1,7 @@
 # Real-Time Face Tracking System
 
 ![CI](https://github.com/Romil2112/Face-Tracking-System/actions/workflows/ci.yml/badge.svg)
-![Python Version](https://img.shields.io/badge/python-3.8%2B-blue?logo=python&logoColor=white)
+![Python Version](https://img.shields.io/badge/python-3.10--3.12-blue?logo=python&logoColor=white)
 ![OpenCV](https://img.shields.io/badge/OpenCV-4.5%2B-orange?logo=opencv&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green?logo=opensourceinitiative&logoColor=white)
 
@@ -63,12 +63,12 @@ It runs three ways: as a **live webcam tracker**, a **headless CLI** over image/
 |---|---|
 | Real-Time Systems | Frame-by-frame processing pipeline with dynamic 1–5 frame skipping and adaptive resource management to hold real-time FPS under load |
 | Computer Vision / Deep Learning | Hybrid detector — ResNet-SSD (300×300) DNN with Haar Cascade fallback, Non-Maximum Suppression, and optical-flow motion analysis |
-| Fault Tolerance | Three-stage recovery (CUDA OOM → CPU, camera timeout → reset, model corruption → cache restore), circuit breakers, and retry with exponential backoff + jitter |
+| Fault Tolerance | Three-stage recovery (CUDA OOM → OpenCL → CPU, camera timeout → reset, model corruption → cache restore), circuit breakers, and retry with exponential backoff + jitter |
 | Hardware Acceleration | `CUDA → OpenCL → CPU` backend auto-selection driven by a pure, unit-tested priority resolver; OpenCL path uses the OpenCV T-API (`cv2.UMat`) for GPU offload, with graceful CPU degradation |
 | Software Engineering | Modular architecture (detection, capture, temporal filtering, error handling, visualization), centralized config, and a CLI argument interface |
 | Backend / REST API | FastAPI service exposing `POST /detect` (image upload → JSON faces) and `GET /health`, decoding images in-memory with OpenCV |
 | Containerization | Dockerfile packaging the detection service for headless deployment (`docker build` → `uvicorn`) |
-| Testing / CI | 51 pytest unit/integration tests (detection logic, NMS, temporal filtering, circuit breakers, REST API, acceleration selection) run on Python 3.10–3.12 via GitHub Actions |
+| Testing / CI | 52 pytest unit/integration tests (detection logic, NMS, temporal filtering, circuit breakers, REST API, acceleration selection) run on Python 3.10–3.12 via GitHub Actions |
 
 ## REST API
 
@@ -143,7 +143,7 @@ docker run -p 8000:8000 face-detection-api
 ## Installation
 
 Prerequisites
-- Python 3.8+
+- Python 3.10+
 - OpenCV 4.5+ with contrib modules
 - CUDA Toolkit 11.0+ + NVIDIA GPU (optional — for the CUDA backend)
 - Any OpenCL device — Intel / AMD / Apple GPU (optional — for the OpenCL/T-API backend; no NVIDIA required)
@@ -194,7 +194,7 @@ Three-tier fault tolerance mechanism:
 3. Graceful Degradation:
   - Dynamic frame skipping
   - Model complexity reduction
-  - CUDA → CPU fallback
+  - CUDA → OpenCL → CPU fallback
 
 ## Contributing
 
