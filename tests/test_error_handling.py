@@ -53,4 +53,4 @@ def test_retry_propagates_after_exhausting_attempts():
 
     with pytest.raises(ValueError):
         always_fails()
-    assert calls["n"] >= 2
+    assert calls["n"] == 2  # exactly max_attempts calls, no bonus call

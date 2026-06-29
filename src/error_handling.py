@@ -24,6 +24,12 @@ class CircuitBreaker:
         self.last_failure = 0
 
     def is_open(self) -> bool:
+        """Whether the breaker is currently tripped.
+
+        Side effect: if the reset window has elapsed since the last failure,
+        this auto-resets the failure count before reporting. Not thread-safe —
+        callers sharing a breaker across threads must synchronize externally.
+        """
         if time.time() - self.last_failure > self.reset_timeout:
             self.reset()
         return self.failure_count >= self.max_failures
@@ -48,17 +54,21 @@ def retry(max_attempts: int = 3,
         @wraps(func)
         def wrapper(*args, **kwargs) -> Any:
             attempts = 0
+            last_exc: Optional[Exception] = None
             while attempts < max_attempts:
                 try:
                     return func(*args, **kwargs)
                 except allowed_exceptions as e:
+                    last_exc = e
                     attempts += 1
                     wait = delay * (2 ** (attempts - 1)) * (1 + jitter * (np.random.random() - 0.5))
                     logger.log(log_level,
                              f"Attempt {attempts}/{max_attempts} failed for {func.__name__}: {str(e)}. "
                              f"Retrying in {wait:.2f}s...")
                     time.sleep(wait)
-            return func(*args, **kwargs)  # Final attempt
+            # All attempts exhausted: re-raise the last failure rather than
+            # invoking func() one extra time outside the loop.
+            raise last_exc
         return wrapper
     return decorator
 

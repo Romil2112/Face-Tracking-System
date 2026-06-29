@@ -73,6 +73,26 @@ def test_to_umat_is_noop_for_cpu():
     assert acceleration.to_umat(frame, accel) is frame
 
 
+def test_to_umat_falls_back_and_warns_when_umat_fails(monkeypatch, caplog):
+    # Force the OpenCL T-API path, then make UMat construction blow up. The
+    # frame must pass through unchanged (CPU fallback) and a warning logged.
+    frame = np.zeros((8, 8, 3), dtype=np.uint8)
+    accel = acceleration.Acceleration(
+        acceleration.OPENCL,
+        cv2.dnn.DNN_BACKEND_OPENCV,
+        getattr(cv2.dnn, "DNN_TARGET_OPENCL", 0),
+    )
+    monkeypatch.setattr(cv2.ocl, "useOpenCL", lambda: True)
+
+    def boom(_frame):
+        raise cv2.error("UMat unavailable")
+
+    monkeypatch.setattr(cv2, "UMat", boom)
+    with caplog.at_level("WARNING"):
+        assert acceleration.to_umat(frame, accel) is frame
+    assert "falling back to CPU" in caplog.text
+
+
 def test_probe_capabilities_returns_expected_keys():
     caps = acceleration.probe_capabilities()
     assert set(caps) == {"cuda", "cuda_targets", "opencl"}

@@ -116,6 +116,6 @@ def to_umat(frame, accel):
     try:
         if accel is not None and accel.name == OPENCL and cv2.ocl.useOpenCL():
             return cv2.UMat(frame)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("UMat conversion failed, falling back to CPU: %s", e)
     return frame
