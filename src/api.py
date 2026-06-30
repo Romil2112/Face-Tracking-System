@@ -20,9 +20,29 @@ from nms_utils import apply_nms
 
 app = FastAPI(
     title="Face Detection API",
-    description="Real-time face detection (ResNet-SSD DNN + Haar fallback) exposed over HTTP.",
+    description=(
+        "Real-time face detection (ResNet-SSD DNN + Haar fallback) exposed over HTTP. "
+        "Uploaded images are processed **in memory only** and are not persisted. "
+        "This is a free, open-source demonstration / trial project — not a certified "
+        "commercial biometric platform. Use it only with images you own or are "
+        "authorized to process, and only where any legally required notice/consent "
+        "is in place."
+    ),
     version="1.0.0",
 )
+
+# Image uploads are decoded, analyzed, and discarded within the request; nothing
+# is written to disk. This header advertises that retention posture on every
+# response (handy for clients and audits).
+_DATA_RETENTION_NOTICE = "no image data stored; processed in-memory only"
+
+
+@app.middleware("http")
+async def add_data_retention_header(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Data-Retention"] = _DATA_RETENTION_NOTICE
+    return response
+
 
 _detector = None
 
@@ -51,7 +71,13 @@ def health() -> dict:
 
 @app.post("/detect")
 async def detect(file: UploadFile = File(...), max_faces: int = 10) -> dict:
-    """Detect faces in an uploaded image and return their bounding boxes as JSON."""
+    """Detect faces in an uploaded image and return their bounding boxes as JSON.
+
+    The uploaded image is processed in memory and discarded once the response is
+    built — it is never written to disk. Use this endpoint only with images you
+    own or are authorized to process, and only where any legally required
+    notice/consent is in place.
+    """
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")

@@ -4,6 +4,7 @@
 ![Python Version](https://img.shields.io/badge/python-3.10--3.12-blue?logo=python&logoColor=white)
 ![OpenCV](https://img.shields.io/badge/OpenCV-4.5%2B-orange?logo=opencv&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-green?logo=opensourceinitiative&logoColor=white)
+![Open Source](https://img.shields.io/badge/Open%20Source-Free%20to%20Use-success)
 
 **Robust Real-Time Face Detection and Tracking with Advanced Error Recovery**
 
@@ -30,8 +31,10 @@ It runs three ways: as a **live webcam tracker**, a **headless CLI** over image/
 - [Configuration](#configuration)
 - [Usage Guide](#usage-guide)
 - [Error Recovery System](#error-recovery-system)
+- [Privacy, Biometrics & Responsible Use](#privacy-biometrics--responsible-use)
 - [Contributing](#contributing)
 - [License](#license)
+- [Legal Notice & Responsible Use](#️-legal-notice--responsible-use)
 
 ## Key Features
 
@@ -196,6 +199,43 @@ Three-tier fault tolerance mechanism:
   - Model complexity reduction
   - CUDA → OpenCL → CPU fallback
 
+## Privacy, Biometrics & Responsible Use
+
+This is a **free and open-source demonstration / trial project**, not a certified commercial
+biometric platform.
+
+### Biometric data disclosure
+Face detection processes **biometric-related data** (images of human faces). Depending on
+where you and your data subjects are located, this may be regulated by laws including:
+
+- **Illinois Biometric Information Privacy Act (BIPA)**
+- **Texas** Capture or Use of Biometric Identifier Act (**CUBI**)
+- **Washington** biometric privacy law (HB 1493)
+- **GDPR Article 9** (special-category data) in the EU/EEA
+- **PIPEDA** in Canada, and other equivalent regimes
+
+You are responsible for determining which laws apply and for obtaining any **legally required
+notice and consent** before processing images of identifiable people.
+
+### Data retention
+The **REST API processes images entirely in memory** — uploaded images are decoded, analyzed,
+and discarded as the response is built. **No image data is stored.** Every API response
+includes the header:
+
+```
+X-Data-Retention: no image data stored; processed in-memory only
+```
+
+The webcam tracker renders to a display window only. The headless CLI writes an annotated
+image **only** when you explicitly pass `--out`; otherwise it persists nothing.
+
+### Authorized & responsible use
+- Use this software only with **images or video you own or are authorized to process**.
+- Do **not** use it to monitor, track, identify, or surveil people **unlawfully**, or without
+  legally required notice/consent.
+- The `/detect` endpoint must only be used where the operator holds all required rights.
+- Provided **as-is, with no warranty** and **no liability for misuse**.
+
 ## Contributing
 
 1. Fork the repository
@@ -208,4 +248,25 @@ git checkout -b feature/improvement
 - Performance benchmarks
 
 ## License
-This project is licensed under the terms of the [LICENSE](https://github.com/Romil2112/Face-Tracking-System/blob/main/LICENSE) file included in this repository.
+This project is licensed under the terms of the [LICENSE](https://github.com/Romil2112/Face-Tracking-System/blob/main/LICENSE) file included in this repository (MIT).
+
+## ⚖️ Legal Notice & Responsible Use
+
+This project is **free and open-source software**, released under the **MIT License** as a
+**demonstration / learning / trial project**. It is provided **"as is", without warranty of
+any kind**, and is **not an audited or certified commercial biometric product**.
+
+- **Authorized use only.** Use it solely with images, video, and devices that you own or are
+  **explicitly authorized** to process.
+- **Do no harm.** Do not use it to surveil, stalk, harass, invade the privacy of, or conduct
+  unauthorized monitoring or identification of any person.
+- **Consent & notice.** Facial detection processes biometric-related data; obtaining any
+  legally required notice and consent is the operator's responsibility.
+- **Compliance is the operator's responsibility.** Compliance with **BIPA, CUBI, Washington
+  HB 1493, GDPR (incl. Article 9), PIPEDA, CCPA**, and equivalent laws — where applicable —
+  rests with the operator.
+- **Misuse may be illegal.** Unauthorized monitoring or biometric processing may violate
+  privacy, biometric, and computer-misuse laws in your jurisdiction.
+
+By using this software you accept responsibility for operating it lawfully. See
+[SECURITY.md](SECURITY.md) to report a vulnerability.

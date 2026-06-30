@@ -37,3 +37,9 @@ def test_detect_rejects_non_image_payload():
 def test_detect_rejects_empty_file():
     resp = client.post("/detect", files={"file": ("empty.png", b"", "image/png")})
     assert resp.status_code == 400
+
+
+def test_data_retention_header_present():
+    resp = client.post("/detect", files={"file": ("blank.png", _png_bytes(), "image/png")})
+    assert resp.status_code == 200
+    assert resp.headers["X-Data-Retention"] == "no image data stored; processed in-memory only"
