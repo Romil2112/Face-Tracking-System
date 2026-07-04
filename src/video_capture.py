@@ -83,22 +83,7 @@ class VideoCapture:
             if not self._is_running or not self.cap.isOpened():
                 return False, None
 
-            # Non-blocking frame acquisition
-            self.cap.grab()
-
-            # Maintain frame rate timing
-            current_time = time.time()
-            elapsed = current_time - self.last_frame_time
-            if elapsed < self.frame_time:
-                time.sleep(self.frame_time - elapsed)
-
-            # Retrieve the frame if it's time to process
-            if config.DYNAMIC_FRAME_SKIP:
-                success, frame = self.cap.retrieve()
-            else:
-                success, frame = False, None
-
-            self.last_frame_time = time.time()
+            success, frame = self._acquire()
 
             if not success or frame is None or frame.size == 0:
                 logger.warning("Frame read failed, attempting recovery...")
@@ -111,6 +96,26 @@ class VideoCapture:
             ErrorHandler.handle_camera_error(e)
             self._recover_capture()
             return False, None
+
+    def _acquire(self) -> Tuple[bool, Optional[np.ndarray]]:
+        """Grab a frame, pace to the target frame time, and retrieve it."""
+        # Non-blocking frame acquisition
+        self.cap.grab()
+
+        # Maintain frame rate timing
+        current_time = time.time()
+        elapsed = current_time - self.last_frame_time
+        if elapsed < self.frame_time:
+            time.sleep(self.frame_time - elapsed)
+
+        # Retrieve the frame if it's time to process
+        if config.DYNAMIC_FRAME_SKIP:
+            success, frame = self.cap.retrieve()
+        else:
+            success, frame = False, None
+
+        self.last_frame_time = time.time()
+        return success, frame
 
     def _recover_capture(self) -> None:
         """Attempt to recover from capture failures."""

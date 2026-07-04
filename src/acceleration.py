@@ -84,14 +84,22 @@ def select_acceleration(priority=None, caps=None):
     cpu = Acceleration(CPU, _const("DNN_BACKEND_OPENCV"), _const("DNN_TARGET_CPU"))
 
     for name in priority:
-        if name == CUDA and caps.get("cuda") and \
-                _const("DNN_TARGET_CUDA") in caps.get("cuda_targets", []):
-            return Acceleration(CUDA, _const("DNN_BACKEND_CUDA"), _const("DNN_TARGET_CUDA"))
-        if name == OPENCL and caps.get("opencl"):
-            return Acceleration(OPENCL, _const("DNN_BACKEND_OPENCV"), _const("DNN_TARGET_OPENCL"))
-        if name == CPU:
-            return cpu
+        accel = _resolve_one(name, caps, cpu)
+        if accel is not None:
+            return accel
     return cpu
+
+
+def _resolve_one(name, caps, cpu):
+    """Resolve a single priority entry to an Acceleration, or None if unusable."""
+    if name == CUDA and caps.get("cuda") and \
+            _const("DNN_TARGET_CUDA") in caps.get("cuda_targets", []):
+        return Acceleration(CUDA, _const("DNN_BACKEND_CUDA"), _const("DNN_TARGET_CUDA"))
+    if name == OPENCL and caps.get("opencl"):
+        return Acceleration(OPENCL, _const("DNN_BACKEND_OPENCV"), _const("DNN_TARGET_OPENCL"))
+    if name == CPU:
+        return cpu
+    return None
 
 
 def apply_to_net(net, accel):

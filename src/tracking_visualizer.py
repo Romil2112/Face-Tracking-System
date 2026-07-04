@@ -82,26 +82,8 @@ class TrackingVisualizer:
 
             output_frame = frame.copy()
 
-            # Draw face annotations
             for face in faces:
-                try:
-                    x, y, w, h = face['rect']
-                    if any(np.isnan([x, y, w, h])):
-                        continue
-                    self._safe_draw_rect(output_frame, x, y, w, h)
-                    
-                    # Draw confidence score
-                    if 'confidence' in face:
-                        confidence_text = f"Conf: {face['confidence']:.2f}"
-                        cv2.putText(output_frame, confidence_text, 
-                                   (x, y - 10), self.font,
-                                   self.font_scale, self.font_color,
-                                   self.font_thickness)
-
-                    if 'center' in face:
-                        self._safe_draw_center(output_frame, face['center'])
-                except (KeyError, TypeError):
-                    continue
+                self._draw_one_face(output_frame, face)
 
             # Draw system metrics
             fps_text = f"FPS: {fps:.2f}"
@@ -114,3 +96,21 @@ class TrackingVisualizer:
         except Exception as e:
             logger.error(f"Face visualization failed: {str(e)}")
             return frame if frame is not None else np.zeros((100, 100, 3), dtype=np.uint8)
+
+    def _draw_one_face(self, output_frame: np.ndarray, face: Dict) -> None:
+        """Draw one face's rectangle, confidence label, and center marker."""
+        try:
+            x, y, w, h = face['rect']
+            if any(np.isnan([x, y, w, h])):
+                return
+            self._safe_draw_rect(output_frame, x, y, w, h)
+            if 'confidence' in face:
+                confidence_text = f"Conf: {face['confidence']:.2f}"
+                cv2.putText(output_frame, confidence_text,
+                           (x, y - 10), self.font,
+                           self.font_scale, self.font_color,
+                           self.font_thickness)
+            if 'center' in face:
+                self._safe_draw_center(output_frame, face['center'])
+        except (KeyError, TypeError):
+            return

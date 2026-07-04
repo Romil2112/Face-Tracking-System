@@ -120,30 +120,36 @@ class TemporalFilter:
 
             valid_faces = [face for face in faces if self._validate_face(face)]
             self.face_history.append(valid_faces)
-
-            if len(self.face_history) >= 2:
-                motion_vector = self._calculate_motion(valid_faces, time_diff)
-                valid_faces = self._apply_motion_prediction(valid_faces, motion_vector, time_diff)
-
-            # Compare against the PREVIOUS frame (history[-1] is the frame we just
-            # appended), so a face's consistency count accumulates across frames.
-            prev_faces = self.face_history[-2] if len(self.face_history) >= 2 else []
-            for face in valid_faces:
-                matches = self._match_faces([face], prev_faces)
-                if matches and matches[0] != -1:
-                    face['consistency'] = prev_faces[matches[0]].get('consistency', 1) + 1
-                else:
-                    face['consistency'] = 1
-
-            filtered_faces = [
-                face for face in valid_faces
-                if face.get('consistency', 0) >= self.consistency_threshold
-            ]
-
-            return filtered_faces
+            return self._track(valid_faces, time_diff)
         except Exception as e:
             logger.error(f"Temporal filtering error: {str(e)}")
             return faces
+
+    def _track(self, valid_faces: List[Dict], time_diff: timedelta) -> List[Dict]:
+        """Apply motion prediction, accumulate consistency vs. the previous frame,
+        and return only faces meeting the consistency threshold."""
+        if len(self.face_history) >= 2:
+            motion_vector = self._calculate_motion(valid_faces, time_diff)
+            valid_faces = self._apply_motion_prediction(valid_faces, motion_vector, time_diff)
+
+        # Compare against the PREVIOUS frame (history[-1] is the frame we just
+        # appended), so a face's consistency count accumulates across frames.
+        prev_faces = self.face_history[-2] if len(self.face_history) >= 2 else []
+        self._update_consistency(valid_faces, prev_faces)
+
+        return [
+            face for face in valid_faces
+            if face.get('consistency', 0) >= self.consistency_threshold
+        ]
+
+    def _update_consistency(self, valid_faces: List[Dict], prev_faces: List[Dict]) -> None:
+        """Bump each face's consistency from its match in the previous frame."""
+        for face in valid_faces:
+            matches = self._match_faces([face], prev_faces)
+            if matches and matches[0] != -1:
+                face['consistency'] = prev_faces[matches[0]].get('consistency', 1) + 1
+            else:
+                face['consistency'] = 1
 
     def reset(self):
         """Reset temporal filter state"""

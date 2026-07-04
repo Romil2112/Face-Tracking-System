@@ -24,45 +24,47 @@ def apply_nms(face_info: List[Dict], overlap_threshold: float = config.NMS_THRES
     Returns:
         Filtered list of face information dictionaries
     """
-    # Validate input
-    if not face_info or any('rect' not in face for face in face_info):
-        return []
-
-    # Extract rectangles and confidence scores
-    boxes = []
-    scores = []
-    valid_faces = []
-    
-    for face in face_info:
-        try:
-            x, y, w, h = face['rect']
-            boxes.append([x, y, x + w, y + h])
-            scores.append(face.get('confidence', 0.5))
-            valid_faces.append(face)
-        except Exception as e:
-            logger.warning(f"Invalid face entry: {str(e)}")
-
+    boxes, scores, valid_faces = _prepare_boxes(face_info)
     if len(valid_faces) <= 1:
         return valid_faces
 
     try:
         # OpenCV 4.x+ NMSBoxes API
         indices = cv2.dnn.NMSBoxes(
-            boxes, 
+            boxes,
             scores,
             score_threshold=config.MINIMUM_CONFIDENCE,
             nms_threshold=overlap_threshold
         )
-        
-        # Handle different return types across OpenCV versions
-        if indices is not None:
-            indices = indices.flatten() if isinstance(indices, np.ndarray) else indices
-            return [valid_faces[i] for i in indices]
-        return []
-
     except (cv2.error, ValueError) as e:
         logger.error(f"NMS failed: {str(e)}. Using manual IOU filtering.")
         return _manual_iou_filter(valid_faces, overlap_threshold)
+
+    # Handle different return types across OpenCV versions.
+    if indices is None:
+        return []
+    indices = indices.flatten() if isinstance(indices, np.ndarray) else indices
+    return [valid_faces[i] for i in indices]
+
+
+def _prepare_boxes(face_info: List[Dict]):
+    """Extract (boxes, scores, valid_faces) from raw detections.
+
+    Rejects the whole batch if any entry lacks 'rect'; skips individual entries
+    whose rect can't be unpacked. Boxes are (x1, y1, x2, y2) for cv2.dnn.NMSBoxes.
+    """
+    if not face_info or any('rect' not in face for face in face_info):
+        return [], [], []
+    boxes, scores, valid_faces = [], [], []
+    for face in face_info:
+        try:
+            x, y, w, h = face['rect']
+            boxes.append([x, y, x + w, y + h])
+            scores.append(face.get('confidence', 0.5))
+            valid_faces.append(face)
+        except (KeyError, ValueError, TypeError) as e:
+            logger.warning(f"Invalid face entry: {str(e)}")
+    return boxes, scores, valid_faces
 
 def _manual_iou_filter(faces: List[Dict], threshold: float) -> List[Dict]:
     """Fallback IOU-based filtering"""

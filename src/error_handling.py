@@ -98,15 +98,10 @@ class ErrorHandler:
         logger.error(f"Resource exhaustion: {str(error)}")
         resource_type = getattr(error, 'resource_type', 'default')
         breaker = self.resource_breakers[resource_type]
-        
-        # Added CUDA backend validation
-        if 'CUDA' in str(error):
-            available_backends = getattr(cv2.dnn, 'getAvailableBackends', lambda: [])()
-            if cv2.dnn.DNN_BACKEND_CUDA not in available_backends:
-                logger.error("CUDA backend not available despite initialization")
-                if "CUDA" in config.ACCELERATION_PRIORITY:
-                    config.ACCELERATION_PRIORITY.remove("CUDA")
-                return True
+
+        cuda_result = self._handle_cuda_backend(error)
+        if cuda_result is not None:
+            return cuda_result
 
         if breaker.is_open():
             logger.error("Resource circuit breaker open")
@@ -130,6 +125,19 @@ class ErrorHandler:
                 return True
         breaker.record_failure()
         return False
+
+    def _handle_cuda_backend(self, error: Exception) -> Optional[bool]:
+        """Handle a CUDA-specific exhaustion. Returns True if handled (drop CUDA
+        from the priority list), else None to fall through to generic recovery."""
+        if 'CUDA' not in str(error):
+            return None
+        available_backends = getattr(cv2.dnn, 'getAvailableBackends', lambda: [])()
+        if cv2.dnn.DNN_BACKEND_CUDA not in available_backends:
+            logger.error("CUDA backend not available despite initialization")
+            if "CUDA" in config.ACCELERATION_PRIORITY:
+                config.ACCELERATION_PRIORITY.remove("CUDA")
+            return True
+        return None
 
     def handle_camera_error(self, error: Optional[Exception] = None) -> bool:
         """Handle camera errors with default parameters"""

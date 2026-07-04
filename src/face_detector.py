@@ -176,7 +176,12 @@ class FaceDetector:
         if not faces and self.haar_initialized:
             faces = self.detect_faces_haar(frame)
 
-        # Post-processing
+        valid_faces = self._valid_detections(faces)
+        return self._rank_and_limit(valid_faces, max_faces)
+
+    @staticmethod
+    def _valid_detections(faces: List[Dict]) -> List[Dict]:
+        """Drop detections with a malformed/degenerate rect (NaN or non-positive)."""
         valid_faces = []
         for f in faces:
             try:
@@ -186,14 +191,16 @@ class FaceDetector:
                 valid_faces.append(f)
             except (KeyError, TypeError):
                 continue
+        return valid_faces
 
-        # Sort and limit results
+    @staticmethod
+    def _rank_and_limit(valid_faces: List[Dict], max_faces: int) -> List[Dict]:
+        """Sort by (confidence, area) desc, drop low-confidence, cap at max_faces."""
         valid_faces.sort(key=lambda x: (x['confidence'], x['area']), reverse=True)
         if config.MINIMUM_CONFIDENCE > 0:
             valid_faces = [f for f in valid_faces if f['confidence'] >= config.MINIMUM_CONFIDENCE]
         if max_faces and max_faces > 0:
             valid_faces = valid_faces[:max_faces]
-
         return valid_faces
 
     def __del__(self):
