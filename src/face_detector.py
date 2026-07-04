@@ -4,14 +4,15 @@ Author: Romil V. Shah
 This module handles face detection using both DNN and Haar Cascade methods with error recovery.
 """
 
+import logging
+import os
+
 import cv2
 import numpy as np
-import os
-import logging
-from typing import List, Dict, Tuple, Optional
-import config
+
 import acceleration
-from error_handling import retry, ErrorHandler
+import config
+from error_handling import ErrorHandler, retry
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +25,11 @@ class FaceDetector:
     def __init__(self, dnn_model_path: str = config.DNN_MODEL_PATH,
                  dnn_config_path: str = config.DNN_CONFIG_PATH,
                  confidence_threshold: float = config.DNN_CONFIDENCE_THRESHOLD,
-                 input_size: Tuple[int, int] = config.DNN_INPUT_SIZE,
+                 input_size: tuple[int, int] = config.DNN_INPUT_SIZE,
                  cascade_path: str = config.CASCADE_PATH,
                  scale_factor: float = config.SCALE_FACTOR,
                  min_neighbors: int = config.MIN_NEIGHBORS,
-                 min_size: Tuple[int, int] = config.MIN_SIZE):
+                 min_size: tuple[int, int] = config.MIN_SIZE):
         """Initialize detector with error recovery mechanisms."""
         self._error_handler = ErrorHandler()
         self.dnn_initialized = False
@@ -86,7 +87,7 @@ class FaceDetector:
             return False
         return True
 
-    def _process_dnn_detections(self, detections: np.ndarray, frame_shape: Tuple[int, int]) -> List[Dict]:
+    def _process_dnn_detections(self, detections: np.ndarray, frame_shape: tuple[int, int]) -> list[dict]:
         """Process raw DNN detections into face dictionaries."""
         height, width = frame_shape
         faces = []
@@ -111,7 +112,7 @@ class FaceDetector:
             })
         return faces
 
-    def detect_faces_dnn(self, frame: np.ndarray) -> List[Dict]:
+    def detect_faces_dnn(self, frame: np.ndarray) -> list[dict]:
         """Perform DNN-based face detection with error recovery."""
         if not self.dnn_initialized or not self._validate_frame(frame):
             return []
@@ -132,7 +133,7 @@ class FaceDetector:
             self.dnn_initialized = False  # Disable DNN for subsequent frames
             return []
 
-    def detect_faces_haar(self, frame: np.ndarray) -> List[Dict]:
+    def detect_faces_haar(self, frame: np.ndarray) -> list[dict]:
         """Perform Haar Cascade-based face detection with fallback."""
         if not self.haar_initialized or not self._validate_frame(frame):
             return []
@@ -160,7 +161,7 @@ class FaceDetector:
             self.haar_initialized = False  # Disable Haar for subsequent frames
             return []
 
-    def detect_faces(self, frame: np.ndarray, max_faces: int = None) -> List[Dict]:
+    def detect_faces(self, frame: np.ndarray, max_faces: int = None) -> list[dict]:
         """Main detection method with automatic fallback and result validation."""
         if not self._validate_frame(frame):
             return []
@@ -180,7 +181,7 @@ class FaceDetector:
         return self._rank_and_limit(valid_faces, max_faces)
 
     @staticmethod
-    def _valid_detections(faces: List[Dict]) -> List[Dict]:
+    def _valid_detections(faces: list[dict]) -> list[dict]:
         """Drop detections with a malformed/degenerate rect (NaN or non-positive)."""
         valid_faces = []
         for f in faces:
@@ -194,7 +195,7 @@ class FaceDetector:
         return valid_faces
 
     @staticmethod
-    def _rank_and_limit(valid_faces: List[Dict], max_faces: int) -> List[Dict]:
+    def _rank_and_limit(valid_faces: list[dict], max_faces: int) -> list[dict]:
         """Sort by (confidence, area) desc, drop low-confidence, cap at max_faces."""
         valid_faces.sort(key=lambda x: (x['confidence'], x['area']), reverse=True)
         if config.MINIMUM_CONFIDENCE > 0:

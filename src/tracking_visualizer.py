@@ -4,11 +4,12 @@ Author: Romil V. Shah
 This module handles visualization of face tracking results with robust error handling.
 """
 
+import logging
+
 import cv2
 import numpy as np
-from typing import List, Dict, Optional, Tuple
+
 import config
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -16,15 +17,15 @@ class TrackingVisualizer:
     """
     Class for visualizing face tracking results with validation and error recovery.
     """
-    
+
     def __init__(self,
-                 rect_color: Tuple[int, int, int] = config.FACE_RECT_COLOR,
+                 rect_color: tuple[int, int, int] = config.FACE_RECT_COLOR,
                  rect_thickness: int = config.FACE_RECT_THICKNESS,
-                 center_color: Tuple[int, int, int] = config.FACE_CENTER_COLOR,
+                 center_color: tuple[int, int, int] = config.FACE_CENTER_COLOR,
                  center_radius: int = config.FACE_CENTER_RADIUS,
                  font: int = getattr(cv2, config.FONT),
                  font_scale: float = config.FONT_SCALE,
-                 font_color: Tuple[int, int, int] = config.FONT_COLOR,
+                 font_color: tuple[int, int, int] = config.FONT_COLOR,
                  font_thickness: int = config.FONT_THICKNESS):
         """
         Initialize visualizer with validation.
@@ -52,7 +53,7 @@ class TrackingVisualizer:
         except Exception as e:
             logger.error(f"Rectangle drawing failed: {str(e)}")
 
-    def _safe_draw_center(self, frame: np.ndarray, center: Tuple[int, int]) -> None:
+    def _safe_draw_center(self, frame: np.ndarray, center: tuple[int, int]) -> None:
         """Draw center point with bounds checking."""
         try:
             height, width = frame.shape[:2]
@@ -63,15 +64,15 @@ class TrackingVisualizer:
         except Exception as e:
             logger.error(f"Center drawing failed: {str(e)}")
 
-    def draw_faces(self, frame: np.ndarray, faces: List[Dict], fps: float) -> np.ndarray:
+    def draw_faces(self, frame: np.ndarray, faces: list[dict], fps: float) -> np.ndarray:
         """
         Draw face annotations and system metrics on frame with error recovery.
-        
+
         Args:
             frame: Input BGR frame
             faces: List of face dictionaries
             fps: Current frames per second
-            
+
         Returns:
             Output frame with visualizations
         """
@@ -97,7 +98,7 @@ class TrackingVisualizer:
             logger.error(f"Face visualization failed: {str(e)}")
             return frame if frame is not None else np.zeros((100, 100, 3), dtype=np.uint8)
 
-    def _draw_one_face(self, output_frame: np.ndarray, face: Dict) -> None:
+    def _draw_one_face(self, output_frame: np.ndarray, face: dict) -> None:
         """Draw one face's rectangle, confidence label, and center marker."""
         try:
             x, y, w, h = face['rect']

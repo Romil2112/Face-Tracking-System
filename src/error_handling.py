@@ -4,13 +4,16 @@ Author: Romil V. Shah
 This module provides advanced error handling and recovery strategies.
 """
 
-import time
 import logging
-from functools import wraps
-from typing import Callable, Type, Tuple, Any, Optional
+import time
 from collections import defaultdict
+from collections.abc import Callable
+from functools import wraps
+from typing import Any
+
 import cv2
 import numpy as np
+
 import config
 
 logger = logging.getLogger(__name__)
@@ -44,7 +47,7 @@ class CircuitBreaker:
 
 def retry(max_attempts: int = 3,
           delay: float = 1,
-          allowed_exceptions: Tuple[Type[Exception], ...] = (Exception,),
+          allowed_exceptions: tuple[type[Exception], ...] = (Exception,),
           jitter: float = 0.1,
           log_level: int = logging.WARNING) -> Callable:
     """
@@ -54,7 +57,7 @@ def retry(max_attempts: int = 3,
         @wraps(func)
         def wrapper(*args, **kwargs) -> Any:
             attempts = 0
-            last_exc: Optional[Exception] = None
+            last_exc: Exception | None = None
             while attempts < max_attempts:
                 try:
                     return func(*args, **kwargs)
@@ -118,7 +121,7 @@ class ErrorHandler:
             self._free_memory_resources,
             self._restart_subsystems
         ]
-        
+
         for strategy in recovery_strategies:
             if strategy(error):
                 breaker.reset()
@@ -126,7 +129,7 @@ class ErrorHandler:
         breaker.record_failure()
         return False
 
-    def _handle_cuda_backend(self, error: Exception) -> Optional[bool]:
+    def _handle_cuda_backend(self, error: Exception) -> bool | None:
         """Handle a CUDA-specific exhaustion. Returns True if handled (drop CUDA
         from the priority list), else None to fall through to generic recovery."""
         if 'CUDA' not in str(error):
@@ -139,13 +142,13 @@ class ErrorHandler:
             return True
         return None
 
-    def handle_camera_error(self, error: Optional[Exception] = None) -> bool:
+    def handle_camera_error(self, error: Exception | None = None) -> bool:
         """Handle camera errors with default parameters"""
         error = error or Exception("Unknown camera error")
         logger.error(f"Camera error: {str(error)}")
         cam_id = getattr(error, 'camera_id', 'default')
         breaker = self.camera_breakers[cam_id]
-        
+
         if breaker.is_open():
             logger.error("Camera circuit breaker open, skipping recovery")
             return False
@@ -155,7 +158,7 @@ class ErrorHandler:
             self._try_alternate_camera,
             self._reset_camera_settings
         ]
-        
+
         for strategy in recovery_strategies:
             if strategy(error):
                 breaker.reset()
@@ -163,13 +166,13 @@ class ErrorHandler:
         breaker.record_failure()
         return False
 
-    def handle_face_detection_error(self, error: Optional[Exception] = None) -> bool:
+    def handle_face_detection_error(self, error: Exception | None = None) -> bool:
         """Handle detection errors with default parameters"""
         error = error or Exception("Unknown face detection error")
         logger.error(f"Face detection error: {str(error)}")
         detector_type = getattr(error, 'detector_type', 'default')
         breaker = self.detector_breakers[detector_type]
-        
+
         if breaker.is_open():
             logger.error("Face detection circuit breaker open")
             return False
@@ -179,7 +182,7 @@ class ErrorHandler:
             self._reload_detection_model,
             self._adjust_detection_parameters
         ]
-        
+
         for strategy in recovery_strategies:
             if strategy(error):
                 breaker.reset()
@@ -271,9 +274,16 @@ class ErrorHandler:
         return True
 
 # Custom exception classes
-class DnnDetectionError(Exception): pass
-class HaarDetectionError(Exception): pass
-class CameraRecoveryError(Exception): pass
+class DnnDetectionError(Exception):
+    pass
+
+
+class HaarDetectionError(Exception):
+    pass
+
+
+class CameraRecoveryError(Exception):
+    pass
 
 # Apply OpenCL warning filter to cv2 logger
 logging.getLogger("cv2").addFilter(ErrorHandler().filter_warnings)

@@ -4,25 +4,27 @@ Author: Romil V. Shah
 This module contains the main execution logic for the face tracking application.
 """
 
-import cv2
-import time
 import argparse
-import sys
-import os
-import tempfile
-import numpy as np
 import concurrent.futures
 import logging
-from typing import Dict, Any, List
+import os
+import sys
+import tempfile
+import time
 from datetime import datetime, timedelta
+from typing import Any
+
+import cv2
+import numpy as np
 from imutils.video import FPS
-from face_detector import FaceDetector
-from video_capture import VideoCapture
-from tracking_visualizer import TrackingVisualizer
-from error_handling import retry, ErrorHandler
-from nms_utils import apply_nms
+
 import acceleration
 import config
+from error_handling import ErrorHandler, retry
+from face_detector import FaceDetector
+from nms_utils import apply_nms
+from tracking_visualizer import TrackingVisualizer
+from video_capture import VideoCapture
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -40,7 +42,7 @@ os.environ.setdefault("OPENCV_OCL4DNN_CONFIG_PATH", _ocl_cache)
 os.environ.setdefault("OPENCV_OPENCL_DEVICE", ":GPU:0")  # any platform, first GPU
 os.environ.setdefault("OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS", "0")
 
-def parse_arguments() -> Dict[str, Any]:
+def parse_arguments() -> dict[str, Any]:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description='Real-time face tracking using OpenCV')
     parser.add_argument('--camera', type=int, default=config.CAMERA_INDEX,
@@ -66,7 +68,7 @@ def initialize_video_capture(camera_index: int, width: int, height: int, fps: in
     """Initialize and configure video capture with retry logic."""
     video_capture = VideoCapture(camera_index, width, height, fps)
     if not video_capture.start():
-        raise IOError("Failed to start video capture")
+        raise OSError("Failed to start video capture")
     return video_capture
 
 def verify_acceleration():
@@ -93,14 +95,14 @@ def validate_configuration() -> None:
         (config.DNN_MODEL_PATH, "DNN Model"),
         (config.DNN_CONFIG_PATH, "DNN Config")
     ]
-    
+
     for path, name in required_files:
         if not os.path.exists(path):
             raise FileNotFoundError(f"{name} file not found at {path}")
-    
+
     if not 0 < config.DNN_CONFIDENCE_THRESHOLD <= 1:
         raise ValueError("DNN confidence threshold must be between 0 and 1")
-    
+
     if config.CAMERA_INDEX < 0:
         raise ValueError("Camera index cannot be negative")
 
@@ -119,7 +121,7 @@ def _validate_cuda_backend() -> None:
             raise RuntimeError("CUDA backend available but CUDA targets missing")
 
 def _detect_and_filter(frame: np.ndarray, face_detector: FaceDetector,
-                       args: Dict[str, Any]) -> List[Dict]:
+                       args: dict[str, Any]) -> list[dict]:
     """Run DNN + Haar in parallel, merge, NMS, confidence-filter, cap at max_faces."""
     with concurrent.futures.ThreadPoolExecutor() as executor:
         dnn_future = executor.submit(face_detector.detect_faces_dnn, frame)
@@ -132,8 +134,8 @@ def _detect_and_filter(frame: np.ndarray, face_detector: FaceDetector,
     return faces[:args['max_faces']]
 
 
-def _apply_motion_gate(faces: List[Dict], prev_frame: np.ndarray,
-                       frame: np.ndarray) -> List[Dict]:
+def _apply_motion_gate(faces: list[dict], prev_frame: np.ndarray,
+                       frame: np.ndarray) -> list[dict]:
     """Keep only faces whose region shows motion above config.MOTION_THRESHOLD."""
     try:
         from motion_utils import detect_motion
@@ -153,7 +155,7 @@ def _apply_motion_gate(faces: List[Dict], prev_frame: np.ndarray,
         return faces
 
 
-def _apply_temporal(faces: List[Dict], temporal_filter, prev_frame: np.ndarray) -> List[Dict]:
+def _apply_temporal(faces: list[dict], temporal_filter, prev_frame: np.ndarray) -> list[dict]:
     """Run the temporal-consistency filter, deriving a safe frame time-delta."""
     try:
         current_time = datetime.now()
@@ -170,8 +172,8 @@ def _apply_temporal(faces: List[Dict], temporal_filter, prev_frame: np.ndarray) 
         return faces
 
 
-def process_frame(frame: np.ndarray, face_detector: FaceDetector, args: Dict[str, Any],
-                 motion_detection: bool, prev_frame: np.ndarray, temporal_filter) -> List[Dict]:
+def process_frame(frame: np.ndarray, face_detector: FaceDetector, args: dict[str, Any],
+                 motion_detection: bool, prev_frame: np.ndarray, temporal_filter) -> list[dict]:
     """Process a single frame through the detection pipeline."""
     try:
         faces = _detect_and_filter(frame, face_detector, args)
@@ -197,7 +199,7 @@ def _next_frame(video_capture: VideoCapture, retry_count: int, max_retries: int)
         return frame, 0
     retry_count += 1
     if retry_count >= max_retries:
-        raise IOError("Maximum retry attempts reached. Stopping face tracking.")
+        raise OSError("Maximum retry attempts reached. Stopping face tracking.")
     time.sleep(1)
     return None, retry_count
 
@@ -217,7 +219,7 @@ def _detect_with_reset(frame, face_detector, args, motion_detection,
         raise
 
 
-def _render(visualizer: TrackingVisualizer, frame, faces: List[Dict], fps) -> None:
+def _render(visualizer: TrackingVisualizer, frame, faces: list[dict], fps) -> None:
     """Update the FPS counter and show the annotated frame."""
     fps.update()
     fps.stop()
@@ -239,14 +241,14 @@ def _handle_loop_error(error: Exception, error_handler: ErrorHandler) -> None:
 
 
 def main_loop(video_capture: VideoCapture, face_detector: FaceDetector,
-             visualizer: TrackingVisualizer, args: Dict[str, Any],
+             visualizer: TrackingVisualizer, args: dict[str, Any],
              motion_detection: bool, temporal_filter, error_handler: ErrorHandler) -> None:
     """Main processing loop with error handling and FPS integration."""
     process_this_frame = 0
     prev_frame = None
     retry_count = 0
     max_retries = 3
-    faces: List[Dict] = []
+    faces: list[dict] = []
     fps = FPS().start()
 
     try:
@@ -285,11 +287,11 @@ def main() -> None:
 
     try:
         validate_configuration()
-        
+
         if args['debug']:
             config.DEBUG_MODE = True
             logging.basicConfig(level=logging.DEBUG)
-        
+
         # Initialize components
         face_detector = FaceDetector(
             dnn_model_path=config.DNN_MODEL_PATH,
@@ -299,17 +301,17 @@ def main() -> None:
             min_neighbors=args['min_neighbors'],
             min_size=config.MIN_SIZE
         )
-        
+
         video_capture = initialize_video_capture(
             args['camera'],
             args['width'],
             args['height'],
             config.CAMERA_FPS
         )
-        
+
         # Verify acceleration support
         verify_acceleration()
-        
+
         # Initialize temporal filter
         temporal_filter = None
         if config.TEMPORAL_FILTERING_ENABLED:
@@ -321,16 +323,16 @@ def main() -> None:
                 )
             except Exception as e:
                 logger.warning(f"Temporal filtering disabled: {e}")
-        
+
         # Initialize motion detection
         motion_detection = config.MOTION_DETECTION_ENABLED
         if motion_detection:
             try:
-                from motion_utils import detect_motion
+                from motion_utils import detect_motion  # noqa: F401  # availability probe
             except ImportError as e:
                 motion_detection = False
                 logger.warning(f"Motion detection disabled: {e}")
-        
+
         # Initialize visualizer
         visualizer = TrackingVisualizer(
             rect_color=config.FACE_RECT_COLOR,
@@ -342,10 +344,10 @@ def main() -> None:
             font_color=config.FONT_COLOR,
             font_thickness=config.FONT_THICKNESS
         )
-        
+
         main_loop(video_capture, face_detector, visualizer, args,
                  motion_detection, temporal_filter, error_handler)
-    
+
     except Exception as e:
         logger.critical(f"Critical error: {e}")
         sys.exit(1)

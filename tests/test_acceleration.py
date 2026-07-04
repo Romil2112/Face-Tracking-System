@@ -8,7 +8,6 @@ import numpy as np
 
 import acceleration
 
-
 CUDA_TARGET = getattr(cv2.dnn, "DNN_TARGET_CUDA", 6)
 
 

@@ -4,13 +4,14 @@ Author: Romil V. Shah
 This module handles video capture operations with robust error recovery and resource management.
 """
 
-import cv2
-import time
 import logging
-from typing import Tuple, Optional
+import time
+
+import cv2
 import numpy as np
+
 import config
-from error_handling import retry, ErrorHandler
+from error_handling import ErrorHandler, retry
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ class VideoCapture:
                 if self.cap.isOpened():
                     break
             if not self.cap.isOpened():
-                raise IOError(f"Could not open camera {self.camera_index}")
+                raise OSError(f"Could not open camera {self.camera_index}")
 
             # Set camera properties with validation
             self._set_camera_property(cv2.CAP_PROP_FRAME_WIDTH, self.target_width)
@@ -77,7 +78,7 @@ class VideoCapture:
         if not self.cap.set(prop_id, value):
             logger.warning(f"Failed to set camera property {prop_id} to {value}")
 
-    def read(self) -> Tuple[bool, Optional[np.ndarray]]:
+    def read(self) -> tuple[bool, np.ndarray | None]:
         """Read frame with error recovery and timing control."""
         try:
             if not self._is_running or not self.cap.isOpened():
@@ -97,7 +98,7 @@ class VideoCapture:
             self._recover_capture()
             return False, None
 
-    def _acquire(self) -> Tuple[bool, Optional[np.ndarray]]:
+    def _acquire(self) -> tuple[bool, np.ndarray | None]:
         """Grab a frame, pace to the target frame time, and retrieve it."""
         # Non-blocking frame acquisition
         self.cap.grab()

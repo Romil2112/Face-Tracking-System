@@ -4,50 +4,51 @@ Author: Romil V. Shah
 This module provides robust motion detection between video frames with error recovery.
 """
 
+import logging
+
 import cv2
 import numpy as np
-from typing import Optional, Tuple
+
 import config
-import logging
 
 logger = logging.getLogger(__name__)
 
 def validate_frames(prev_frame: np.ndarray, curr_frame: np.ndarray) -> bool:
     """
     Validate input frames for motion detection.
-    
+
     Args:
         prev_frame: Previous frame numpy array
         curr_frame: Current frame numpy array
-    
+
     Returns:
         bool: True if frames are valid for motion detection
     """
     if prev_frame is None or curr_frame is None:
         logger.error("Received None frame in motion detection")
         return False
-    
+
     if prev_frame.shape != curr_frame.shape:
         logger.error(f"Frame size mismatch: {prev_frame.shape} vs {curr_frame.shape}")
         return False
-    
+
     if len(prev_frame.shape) != 3 or prev_frame.dtype != np.uint8:
         logger.error("Invalid frame format, expected 3-channel BGR uint8")
         return False
-    
+
     return True
 
-def detect_motion(prev_frame: np.ndarray, 
+def detect_motion(prev_frame: np.ndarray,
                  curr_frame: np.ndarray,
-                 debug: bool = False) -> Optional[Tuple[np.ndarray, Optional[np.ndarray]]]:
+                 debug: bool = False) -> tuple[np.ndarray, np.ndarray | None] | None:
     """
     Detect motion between frames using optical flow with error handling.
-    
+
     Args:
         prev_frame: Previous BGR frame
         curr_frame: Current BGR frame
         debug: Return visualization frame if True
-    
+
     Returns:
         Optional[Tuple]: (magnitude array, visualization frame) or None
     """
@@ -84,12 +85,12 @@ def detect_motion(prev_frame: np.ndarray,
             # Create HSV visualization for debug
             hsv = np.zeros_like(prev_frame)
             hsv[..., 1] = 255  # Max saturation
-            
+
             # Convert angle from radians to degrees (0-180 for OpenCV)
             _, angle = cv2.cartToPolar(flow[..., 0], flow[..., 1])
             hsv[..., 0] = angle * 180 / np.pi / 2
             hsv[..., 2] = magnitude
-            
+
             vis_frame = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
 
         return (magnitude, vis_frame) if debug else magnitude

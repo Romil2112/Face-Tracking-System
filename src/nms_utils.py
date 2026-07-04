@@ -4,15 +4,16 @@ Author: Romil V. Shah
 This module provides utilities for applying Non-Maximum Suppression to filter overlapping face detections.
 """
 
-import numpy as np
-import cv2
 import logging
-from typing import List, Dict
+
+import cv2
+import numpy as np
+
 import config
 
 logger = logging.getLogger(__name__)
 
-def apply_nms(face_info: List[Dict], overlap_threshold: float = config.NMS_THRESHOLD) -> List[Dict]:
+def apply_nms(face_info: list[dict], overlap_threshold: float = config.NMS_THRESHOLD) -> list[dict]:
     """
     Apply Non-Maximum Suppression to filter overlapping face detections.
 
@@ -47,7 +48,7 @@ def apply_nms(face_info: List[Dict], overlap_threshold: float = config.NMS_THRES
     return [valid_faces[i] for i in indices]
 
 
-def _prepare_boxes(face_info: List[Dict]):
+def _prepare_boxes(face_info: list[dict]):
     """Extract (boxes, scores, valid_faces) from raw detections.
 
     Rejects the whole batch if any entry lacks 'rect'; skips individual entries
@@ -66,7 +67,7 @@ def _prepare_boxes(face_info: List[Dict]):
             logger.warning(f"Invalid face entry: {str(e)}")
     return boxes, scores, valid_faces
 
-def _manual_iou_filter(faces: List[Dict], threshold: float) -> List[Dict]:
+def _manual_iou_filter(faces: list[dict], threshold: float) -> list[dict]:
     """Fallback IOU-based filtering"""
     filtered = []
     for current in sorted(faces, key=lambda x: x['confidence'], reverse=True):
@@ -85,17 +86,17 @@ def _calculate_iou(box1, box2):
     # Convert to (x1, y1, x2, y2)
     box1 = [box1[0], box1[1], box1[0]+box1[2], box1[1]+box1[3]]
     box2 = [box2[0], box2[1], box2[0]+box2[2], box2[1]+box2[3]]
-    
+
     x_left = max(box1[0], box2[0])
     y_top = max(box1[1], box2[1])
     x_right = min(box1[2], box2[2])
     y_bottom = min(box1[3], box2[3])
-    
+
     if x_right < x_left or y_bottom < y_top:
         return 0.0
-        
+
     intersection = (x_right - x_left) * (y_bottom - y_top)
     area1 = (box1[2]-box1[0]) * (box1[3]-box1[1])
     area2 = (box2[2]-box2[0]) * (box2[3]-box2[1])
-    
+
     return intersection / (area1 + area2 - intersection)

@@ -1,7 +1,7 @@
 """Unit tests for Non-Maximum Suppression helpers."""
 import pytest
 
-from nms_utils import apply_nms, _calculate_iou
+from nms_utils import _calculate_iou, apply_nms
 
 
 def make_face(rect, confidence=0.9):
