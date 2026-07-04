@@ -71,6 +71,7 @@ def annotate(frame, faces):
 
 
 def main(argv=None) -> int:
+    """CLI entry: detect faces in an image or video and print/write the results."""
     parser = argparse.ArgumentParser(description="Headless face detection on an image or video.")
     src = parser.add_mutually_exclusive_group(required=True)
     src.add_argument("--image", help="Path to an image file")

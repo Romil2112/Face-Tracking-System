@@ -112,6 +112,30 @@ docker run -p 8000:8000 face-detection-api
 ```
 
 ## Technical Architecture
+
+### Detection Pipeline
+
+Each frame runs the DNN and Haar detectors in parallel, merges and de-duplicates
+the results with NMS, optionally gates them by motion, and smooths across frames
+with the temporal filter before drawing. A circuit-breaker/retry layer wraps the
+camera and detectors so a transient failure degrades (CUDA → OpenCL → CPU, frame
+skipping) instead of crashing.
+
+```mermaid
+flowchart LR
+    CAM[Camera / image / video] --> ACQ[VideoCapture<br/>pacing + recovery]
+    ACQ --> PAR{parallel}
+    PAR --> DNN[ResNet-SSD DNN]
+    PAR --> HAAR[Haar cascade]
+    DNN --> NMS[NMS merge]
+    HAAR --> NMS
+    NMS --> MOT[Motion gate<br/>optional]
+    MOT --> TMP[Temporal filter<br/>5-frame consistency]
+    TMP --> VIS[Visualizer / JSON]
+    ACCEL[Acceleration<br/>CUDA→OpenCL→CPU] -.-> DNN
+    ACCEL -.-> HAAR
+```
+
 ### Core Components
 ├── haarcascade_frontalface_default.xml  
 ├── LICENSE  
@@ -170,6 +194,15 @@ pip install -r requirements.txt
 
 ## Configuration
 You can modify various parameters in the `config.py` file to adjust the application's behavior.
+
+### Environment Variables
+All optional — the app runs with sensible defaults if none are set.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `MAX_UPLOAD_BYTES` | `10485760` (10 MiB) | Max accepted image size on the API `POST /detect` |
+| `OPENCV_OCL_CACHE_DIR` | `<tempdir>/ocl_cache` | Directory for OpenCL's compiled-kernel cache |
+| `OPENCV_OPENCL_DEVICE` | `:GPU:0` | OpenCL device selector (any platform, first GPU) |
 
 ## Usage Guide
 To run the application:

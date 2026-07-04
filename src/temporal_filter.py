@@ -15,6 +15,8 @@ from geometry import calculate_iou
 logger = logging.getLogger(__name__)
 
 class TemporalFilter:
+    """Suppress flicker by keeping only faces seen consistently across frames."""
+
     def __init__(self, history_size: int = 5, consistency_threshold: int = 3):
         self.history_size = history_size
         self.consistency_threshold = consistency_threshold
@@ -101,6 +103,12 @@ class TemporalFilter:
         return faces
 
     def update(self, faces: list[dict], time_diff: timedelta) -> list[dict]:
+        """Filter faces for temporal consistency vs. recent frames.
+
+        Appends this frame to the rolling history, applies motion prediction, and
+        returns only faces whose cross-frame consistency meets the threshold. On
+        any error the input faces are returned unchanged.
+        """
         try:
             if not isinstance(faces, list):
                 logger.error("Invalid input type for faces")

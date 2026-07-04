@@ -16,6 +16,8 @@ from error_handling import ErrorHandler, retry
 logger = logging.getLogger(__name__)
 
 class VideoCapture:
+    """Camera capture with frame-rate pacing, retry, and error recovery."""
+
     def __init__(self, camera_index: int = config.CAMERA_INDEX,
                  width: int = config.CAMERA_WIDTH,
                  height: int = config.CAMERA_HEIGHT,

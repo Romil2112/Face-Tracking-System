@@ -38,10 +38,12 @@ class CircuitBreaker:
         return self.failure_count >= self.max_failures
 
     def record_failure(self):
+        """Count a failure and stamp the time; may trip the breaker open."""
         self.failure_count += 1
         self.last_failure = time.time()
 
     def reset(self):
+        """Clear the failure count, closing the breaker."""
         self.failure_count = 0
         self.last_failure = 0
 
@@ -54,8 +56,10 @@ def retry(max_attempts: int = 3,
     Enhanced retry decorator with exponential backoff and jitter
     """
     def decorator(func: Callable) -> Callable:
+        """Wrap ``func`` with the configured retry policy."""
         @wraps(func)
         def wrapper(*args, **kwargs) -> Any:
+            """Call ``func``, retrying allowed exceptions with backoff + jitter."""
             attempts = 0
             last_exc: Exception | None = None
             while attempts < max_attempts:
@@ -275,14 +279,17 @@ class ErrorHandler:
 
 # Custom exception classes
 class DnnDetectionError(Exception):
+    """Raised when the DNN detector fails to run or initialize."""
     pass
 
 
 class HaarDetectionError(Exception):
+    """Raised when the Haar cascade detector fails to run or initialize."""
     pass
 
 
 class CameraRecoveryError(Exception):
+    """Raised when camera recovery attempts are exhausted."""
     pass
 
 # Apply OpenCL warning filter to cv2 logger

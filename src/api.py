@@ -43,6 +43,7 @@ MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", str(10 * 1024 * 1024))
 
 @app.middleware("http")
 async def add_data_retention_header(request, call_next):
+    """Stamp every response with the in-memory data-retention notice."""
     response = await call_next(request)
     response.headers["X-Data-Retention"] = _DATA_RETENTION_NOTICE
     return response
