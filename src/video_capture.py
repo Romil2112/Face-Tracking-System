@@ -29,6 +29,7 @@ class VideoCapture:
         self.frame_time = 1.0 / fps if fps > 0 else 0
         self.last_frame_time = 0
         self._is_running = False
+        self._error_handler = ErrorHandler()
 
     def __enter__(self):
         self.start()
@@ -69,7 +70,7 @@ class VideoCapture:
             return True
         except Exception as e:
             logger.error(f"Video capture initialization failed: {str(e)}")
-            ErrorHandler.handle_camera_error(e)
+            self._error_handler.handle_camera_error(e)
             self.stop()
             return False
 
@@ -94,7 +95,7 @@ class VideoCapture:
             return True, frame
         except Exception as e:
             logger.error(f"Critical read error: {str(e)}")
-            ErrorHandler.handle_camera_error(e)
+            self._error_handler.handle_camera_error(e)
             self._recover_capture()
             return False, None
 
