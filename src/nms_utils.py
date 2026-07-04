@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 
 import config
+from geometry import calculate_iou
 
 logger = logging.getLogger(__name__)
 
@@ -82,21 +83,5 @@ def _manual_iou_filter(faces: list[dict], threshold: float) -> list[dict]:
     return filtered
 
 def _calculate_iou(box1, box2):
-    """Calculate Intersection over Union (reused from temporal_filter.py)"""
-    # Convert to (x1, y1, x2, y2)
-    box1 = [box1[0], box1[1], box1[0]+box1[2], box1[1]+box1[3]]
-    box2 = [box2[0], box2[1], box2[0]+box2[2], box2[1]+box2[3]]
-
-    x_left = max(box1[0], box2[0])
-    y_top = max(box1[1], box2[1])
-    x_right = min(box1[2], box2[2])
-    y_bottom = min(box1[3], box2[3])
-
-    if x_right < x_left or y_bottom < y_top:
-        return 0.0
-
-    intersection = (x_right - x_left) * (y_bottom - y_top)
-    area1 = (box1[2]-box1[0]) * (box1[3]-box1[1])
-    area2 = (box2[2]-box2[0]) * (box2[3]-box2[1])
-
-    return intersection / (area1 + area2 - intersection)
+    """IoU of two (x, y, w, h) boxes. Thin wrapper over geometry.calculate_iou."""
+    return calculate_iou(box1, box2)

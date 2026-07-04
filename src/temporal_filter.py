@@ -10,6 +10,8 @@ from datetime import timedelta
 
 import numpy as np
 
+from geometry import calculate_iou
+
 logger = logging.getLogger(__name__)
 
 class TemporalFilter:
@@ -30,22 +32,8 @@ class TemporalFilter:
         return True
 
     def _calculate_iou(self, box1: tuple, box2: tuple) -> float:
-        try:
-            x1, y1, w1, h1 = box1
-            x2, y2, w2, h2 = box2
-
-            xi1, yi1 = max(x1, x2), max(y1, y2)
-            xi2, yi2 = min(x1 + w1, x2 + w2), min(y1 + h1, y2 + h2)
-            inter_area = max(0, xi2 - xi1) * max(0, yi2 - yi1)
-
-            box1_area = w1 * h1
-            box2_area = w2 * h2
-            union_area = box1_area + box2_area - inter_area
-
-            return inter_area / union_area if union_area > 0 else 0.0
-        except Exception as e:
-            logger.error(f"IoU calculation error: {str(e)}")
-            return 0.0
+        """IoU of two (x, y, w, h) boxes. Thin wrapper over geometry.calculate_iou."""
+        return calculate_iou(box1, box2)
 
     def _match_faces(self, current_faces: list[dict], previous_faces: list[dict]) -> list[int]:
         matches = []
