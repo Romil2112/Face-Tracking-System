@@ -202,7 +202,8 @@ class ErrorHandler:
                     logger.info(f"Found working camera at index {idx}")
                     cap.release()
                     return True
-            except:
+            except (cv2.error, OSError) as e:
+                logger.debug(f"Camera index {idx} unavailable: {e}")
                 continue
         return False
 

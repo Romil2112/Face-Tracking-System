@@ -9,6 +9,7 @@ import time
 import argparse
 import sys
 import os
+import tempfile
 import numpy as np
 import concurrent.futures
 import logging
@@ -30,7 +31,12 @@ logger = logging.getLogger(__name__)
 # Configure environment for optimal performance. Defaults only (setdefault) so
 # the user can override the OpenCL device; prefer any GPU rather than pinning a
 # specific vendor.
-os.environ.setdefault("OPENCV_OCL4DNN_CONFIG_PATH", "/tmp/ocl_cache")
+# OpenCL kernel cache dir: configurable, and defaults under the platform temp
+# dir rather than a hardcoded world-writable /tmp path.
+_ocl_cache = os.environ.get("OPENCV_OCL_CACHE_DIR") or os.path.join(
+    tempfile.gettempdir(), "ocl_cache"
+)
+os.environ.setdefault("OPENCV_OCL4DNN_CONFIG_PATH", _ocl_cache)
 os.environ.setdefault("OPENCV_OPENCL_DEVICE", ":GPU:0")  # any platform, first GPU
 os.environ.setdefault("OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS", "0")
 

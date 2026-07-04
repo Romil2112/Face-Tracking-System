@@ -36,6 +36,10 @@ app = FastAPI(
 # response (handy for clients and audits).
 _DATA_RETENTION_NOTICE = "no image data stored; processed in-memory only"
 
+# Cap the accepted upload size so a single huge request can't exhaust memory
+# (the image is decoded into RAM). Default 10 MiB; override via MAX_UPLOAD_BYTES.
+MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))
+
 
 @app.middleware("http")
 async def add_data_retention_header(request, call_next):
@@ -78,9 +82,16 @@ async def detect(file: UploadFile = File(...), max_faces: int = 10) -> dict:
     own or are authorized to process, and only where any legally required
     notice/consent is in place.
     """
-    data = await file.read()
+    # Read at most one byte past the cap so an oversized upload is rejected
+    # without pulling the whole payload into memory.
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Image exceeds {MAX_UPLOAD_BYTES} bytes",
+        )
 
     frame = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
     if frame is None:

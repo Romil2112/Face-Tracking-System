@@ -55,20 +55,20 @@ def probe_capabilities():
     caps = {"cuda": False, "cuda_targets": [], "opencl": False}
     try:
         caps["cuda"] = cv2.cuda.getCudaEnabledDeviceCount() > 0
-    except Exception:
-        pass
+    except (cv2.error, AttributeError) as e:
+        logger.debug("CUDA probe unavailable: %s", e)
     try:
         backends = cv2.dnn.getAvailableBackends()
         if _const("DNN_BACKEND_CUDA") in backends:
             caps["cuda_targets"] = list(
                 cv2.dnn.getAvailableTargets(_const("DNN_BACKEND_CUDA"))
             )
-    except Exception:
-        pass
+    except (cv2.error, AttributeError) as e:
+        logger.debug("CUDA target probe unavailable: %s", e)
     try:
         caps["opencl"] = bool(cv2.ocl.haveOpenCL())
-    except Exception:
-        pass
+    except (cv2.error, AttributeError) as e:
+        logger.debug("OpenCL probe unavailable: %s", e)
     return caps
 
 
@@ -102,8 +102,8 @@ def apply_to_net(net, accel):
     """
     try:
         cv2.ocl.setUseOpenCL(accel.name == OPENCL)
-    except Exception:
-        pass
+    except (cv2.error, AttributeError) as e:
+        logger.debug("Could not toggle OpenCL: %s", e)
     net.setPreferableBackend(accel.backend)
     net.setPreferableTarget(accel.target)
     logger.info("%s acceleration enabled (target=%s)", accel.name, accel.target)

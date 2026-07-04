@@ -39,6 +39,15 @@ def test_detect_rejects_empty_file():
     assert resp.status_code == 400
 
 
+def test_detect_rejects_oversized_upload(monkeypatch):
+    import api
+    monkeypatch.setattr(api, "MAX_UPLOAD_BYTES", 100)
+    resp = client.post(
+        "/detect", files={"file": ("big.png", b"x" * 500, "image/png")}
+    )
+    assert resp.status_code == 413
+
+
 def test_data_retention_header_present():
     resp = client.post("/detect", files={"file": ("blank.png", _png_bytes(), "image/png")})
     assert resp.status_code == 200
