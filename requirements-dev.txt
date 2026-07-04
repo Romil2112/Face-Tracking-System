@@ -1,7 +1,9 @@
 # Test/CI dependencies (headless OpenCV - no GUI libraries needed on CI runners)
 opencv-python-headless>=4.5.0
 numpy>=1.20.0
+imutils>=0.5.4        # main.py imports imutils.video.FPS; needed to import/test it
 pytest>=7.0
+pytest-cov>=4.0       # coverage reporting (pytest --cov)
 # API testing
 fastapi>=0.110
 uvicorn[standard]>=0.27
