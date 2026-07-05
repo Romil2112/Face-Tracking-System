@@ -1,3 +1,5 @@
-opencv-python>=4.5.0
-numpy>=1.20.0
-imutils>=0.5.4
+# Desktop/CLI runtime (GUI OpenCV for local display). opencv pinned <5:
+# opencv-python 5.x fails to initialize the bundled detectors.
+opencv-python==4.13.0.92
+numpy==2.2.6
+imutils==0.5.4
