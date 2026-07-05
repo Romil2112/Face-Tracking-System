@@ -76,8 +76,10 @@ def detect_motion(prev_frame: np.ndarray,
             flags=0
         )
 
-        # Calculate motion magnitude with clipping
-        magnitude, _ = cv2.cartToPolar(flow[..., 0], flow[..., 1])
+        # Magnitude and angle come from a single cartToPolar; angle is only used
+        # for the debug visualization but is free to keep here (recomputing it
+        # separately meant a second full-frame cartToPolar pass).
+        magnitude, angle = cv2.cartToPolar(flow[..., 0], flow[..., 1])
         magnitude = cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
 
         vis_frame = None
@@ -87,7 +89,6 @@ def detect_motion(prev_frame: np.ndarray,
             hsv[..., 1] = 255  # Max saturation
 
             # Convert angle from radians to degrees (0-180 for OpenCV)
-            _, angle = cv2.cartToPolar(flow[..., 0], flow[..., 1])
             hsv[..., 0] = angle * 180 / np.pi / 2
             hsv[..., 2] = magnitude
 
