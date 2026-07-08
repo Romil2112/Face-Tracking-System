@@ -17,7 +17,7 @@ Writing tests for the camera-failure path turned up a real bug: the recovery cod
 - Optical-flow motion gate (optional)
 - Hardware backend auto-selection: CUDA → OpenCL (T-API) → CPU
 - Circuit-breaker and exponential-backoff retry around the camera and detectors
-- Camera reset and model-cache restore on failure
+- Camera reconnect and DNN-to-Haar detector fallback on failure
 - FastAPI service: `POST /detect` (image upload → JSON faces) and `GET /health`
 - Headless CLI over image and video files, plus a live webcam tracker
 - Adaptive 1–5 frame skipping under load
