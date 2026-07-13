@@ -3,7 +3,8 @@ import numpy as np
 import pytest
 
 import nms_utils
-from nms_utils import _calculate_iou, _manual_iou_filter, _prepare_boxes, apply_nms
+from geometry import calculate_iou
+from nms_utils import _manual_iou_filter, _prepare_boxes, apply_nms
 
 
 def make_face(rect, confidence=0.9):
@@ -11,11 +12,11 @@ def make_face(rect, confidence=0.9):
 
 
 def test_iou_identical_boxes_is_one():
-    assert _calculate_iou((0, 0, 10, 10), (0, 0, 10, 10)) == pytest.approx(1.0)
+    assert calculate_iou((0, 0, 10, 10), (0, 0, 10, 10)) == pytest.approx(1.0)
 
 
 def test_iou_disjoint_boxes_is_zero():
-    assert _calculate_iou((0, 0, 10, 10), (100, 100, 10, 10)) == 0.0
+    assert calculate_iou((0, 0, 10, 10), (100, 100, 10, 10)) == 0.0
 
 
 def test_apply_nms_empty_input_returns_empty():

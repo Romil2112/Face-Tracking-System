@@ -33,10 +33,6 @@ class TemporalFilter:
             return False
         return True
 
-    def _calculate_iou(self, box1: tuple, box2: tuple) -> float:
-        """IoU of two (x, y, w, h) boxes. Thin wrapper over geometry.calculate_iou."""
-        return calculate_iou(box1, box2)
-
     def _match_faces(self, current_faces: list[dict], previous_faces: list[dict]) -> list[int]:
         matches = []
         for current_face in current_faces:
@@ -50,7 +46,7 @@ class TemporalFilter:
                 if not self._validate_face(prev_face):
                     continue
 
-                iou = self._calculate_iou(current_face['rect'], prev_face['rect'])
+                iou = calculate_iou(current_face['rect'], prev_face['rect'])
                 confidence_score = (current_face['confidence'] + prev_face['confidence']) / 2
                 combined_score = iou * confidence_score
 

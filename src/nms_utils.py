@@ -74,7 +74,7 @@ def _manual_iou_filter(faces: list[dict], threshold: float) -> list[dict]:
     for current in sorted(faces, key=lambda x: x['confidence'], reverse=True):
         keep = True
         for kept in filtered:
-            iou = _calculate_iou(current['rect'], kept['rect'])
+            iou = calculate_iou(current['rect'], kept['rect'])
             if iou > threshold:
                 keep = False
                 break
@@ -82,6 +82,3 @@ def _manual_iou_filter(faces: list[dict], threshold: float) -> list[dict]:
             filtered.append(current)
     return filtered
 
-def _calculate_iou(box1, box2):
-    """IoU of two (x, y, w, h) boxes. Thin wrapper over geometry.calculate_iou."""
-    return calculate_iou(box1, box2)

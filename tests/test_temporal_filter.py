@@ -3,6 +3,7 @@ from datetime import timedelta
 
 import pytest
 
+from geometry import calculate_iou
 from temporal_filter import TemporalFilter
 
 
@@ -16,22 +17,22 @@ def tf():
     return TemporalFilter(history_size=5, consistency_threshold=2)
 
 
-def test_iou_identical_boxes_is_one(tf):
-    assert tf._calculate_iou((0, 0, 10, 10), (0, 0, 10, 10)) == pytest.approx(1.0)
+def test_iou_identical_boxes_is_one():
+    assert calculate_iou((0, 0, 10, 10), (0, 0, 10, 10)) == pytest.approx(1.0)
 
 
-def test_iou_disjoint_boxes_is_zero(tf):
-    assert tf._calculate_iou((0, 0, 10, 10), (100, 100, 10, 10)) == 0.0
+def test_iou_disjoint_boxes_is_zero():
+    assert calculate_iou((0, 0, 10, 10), (100, 100, 10, 10)) == 0.0
 
 
-def test_iou_partial_overlap(tf):
+def test_iou_partial_overlap():
     # Boxes overlap on half their width -> intersection 50 / union 150.
-    assert tf._calculate_iou((0, 0, 10, 10), (5, 0, 10, 10)) == pytest.approx(1 / 3, abs=1e-6)
+    assert calculate_iou((0, 0, 10, 10), (5, 0, 10, 10)) == pytest.approx(1 / 3, abs=1e-6)
 
 
-def test_iou_handles_degenerate_union_gracefully(tf):
+def test_iou_handles_degenerate_union_gracefully():
     # Zero-area boxes must not raise (division-by-zero guard).
-    assert tf._calculate_iou((0, 0, 0, 0), (0, 0, 0, 0)) == 0.0
+    assert calculate_iou((0, 0, 0, 0), (0, 0, 0, 0)) == 0.0
 
 
 def test_validate_face_accepts_well_formed_face(tf):
