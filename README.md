@@ -2,6 +2,12 @@
 
 Real-time face tracking is a computer-vision service that detects and tracks faces in a webcam stream, in image or video files, or over an HTTP API. It runs a ResNet-SSD network and a Haar cascade together, smooths detections across frames, and keeps running when a camera or GPU backend fails instead of crashing. It returns face boxes with center points and confidence scores as JSON, or draws them on a live or annotated frame. I built it with Parshav.
 
+## Demo
+
+API walkthrough — starting the server, calling `/detect` with an image, and seeing the face detection JSON response:
+
+![Face Tracking API demo](docs/face_tracking_demo.gif)
+
 ## How it works
 
 Each frame goes through two detectors at once. The ResNet-SSD network is accurate on frontal faces but misses some at sharp angles; the Haar cascade picks up a different set. Their boxes are merged with non-maximum suppression, which also drops the duplicate overlapping boxes so one face is reported once. A motion gate and a temporal filter follow: the temporal filter holds a candidate across a 5-frame window and only reports it once it shows up consistently, which clears out most one-frame false positives before they reach the output.
@@ -24,23 +30,56 @@ Writing tests for the camera-failure path turned up a real bug: the recovery cod
 - opencv pinned below 5 (5.x breaks the bundled detector initialization)
 - 204 pytest tests at 96% line / 93% branch coverage on Python 3.10–3.12
 
-## Quick Start
+## Running the Project
 
-Prerequisites: Python 3.10 to 3.12 and OpenCV 4.x (opencv is pinned below 5). A CUDA or OpenCL GPU is optional; with neither, it runs on CPU.
+**Prerequisites:** Python 3.10–3.12 and OpenCV 4.x (`requirements.txt` pins opencv below 5 because 5.x breaks the bundled detector initialization). A CUDA or OpenCL GPU is optional; without one it runs on CPU.
 
-Run it as an HTTP service with Docker:
+### Option A — HTTP API with Docker (recommended)
 
 ```bash
 docker build -t face-detection-api .
 docker run -p 8000:8000 face-detection-api
 ```
 
-Or locally:
+Test the API:
 
 ```bash
+curl http://localhost:8000/health
+# {"status":"ok"}
+
+curl -X POST http://localhost:8000/detect -F "file=@your_photo.jpg"
+# {"count": 1, "faces": [{"rect": [142, 88, 95, 95], "center": [189, 135], "confidence": 0.99}]}
+```
+
+Interactive API docs are auto-generated at <http://localhost:8000/docs>.
+
+### Option B — HTTP API locally
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements-api.txt
-uvicorn src.api:app --port 8000          # HTTP service
-python src/main.py --width 800 --height 600   # live webcam tracker
+uvicorn src.api:app --port 8000
+```
+
+### Option C — Live webcam tracker
+
+Requires a connected camera and full dependencies:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python src/main.py --width 1280 --height 720
+# press Q to quit
+```
+
+The tracker auto-selects the fastest available backend at startup (CUDA → OpenCL → CPU) and prints which one it chose.
+
+### Option D — Headless CLI (image or video file, no server)
+
+```bash
+python src/cli_detect.py --image portrait.jpg --output result.jpg
 ```
 
 ## API reference
