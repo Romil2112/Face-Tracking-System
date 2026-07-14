@@ -4,9 +4,9 @@ Real-time face tracking is a computer-vision service that detects and tracks fac
 
 ## Demo
 
-API walkthrough — starting the server, calling `/detect` with an image, and seeing the face detection JSON response:
+Real-time face detection demo — live webcam feed with bounding boxes, confidence scores, and frame-by-frame detection status:
 
-![Face Tracking API demo](docs/face_tracking_demo.gif)
+![Face Tracking demo](docs/face_tracking_demo.gif)
 
 ## How it works
 
