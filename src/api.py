@@ -31,6 +31,7 @@ from metrics import (
 from nms_utils import apply_nms
 from liveness import LIVENESS_CHECK_ENABLED, LivenessDetector
 from rate_limiter import get_rate_limit, limiter, rate_limit_exceeded_handler
+from triage import TRIAGE_CONFIDENCE_THRESHOLD, triage_detection
 
 app = FastAPI(
     title="Face Detection API",
@@ -111,6 +112,7 @@ async def detect(
     request: Request,
     file: UploadFile = File(...),
     max_faces: int = Query(default=10, ge=1, le=100),
+    triage: bool = Query(default=False),
 ) -> dict:
     """Detect faces in an uploaded image and return their bounding boxes as JSON.
 
@@ -161,6 +163,13 @@ async def detect(
         if _liveness_detector is not None:
             for face in serialized:
                 face["liveness"] = _liveness_detector.check_single_image(frame)
+
+        if triage:
+            for face in serialized:
+                if face["confidence"] < TRIAGE_CONFIDENCE_THRESHOLD:
+                    note = triage_detection(face)
+                    if note is not None:
+                        face["triage_note"] = note
 
         record_backend(backend)
         logger.info(
