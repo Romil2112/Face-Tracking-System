@@ -29,6 +29,7 @@ from metrics import (
     record_error,
 )
 from nms_utils import apply_nms
+from liveness import LIVENESS_CHECK_ENABLED, LivenessDetector
 from rate_limiter import get_rate_limit, limiter, rate_limit_exceeded_handler
 
 app = FastAPI(
@@ -56,6 +57,10 @@ MAX_CONCURRENT_DETECTIONS = int(os.environ.get("MAX_CONCURRENT_DETECTIONS", "10"
 # In asyncio there is no preemption between two non-awaited statements, so the
 # check-then-decrement below is atomic within a single event loop turn.
 _detection_slots: int = MAX_CONCURRENT_DETECTIONS
+
+_liveness_detector: LivenessDetector | None = (
+    LivenessDetector() if LIVENESS_CHECK_ENABLED else None
+)
 
 # Image uploads are decoded, analyzed, and discarded within the request; nothing
 # is written to disk. This header advertises that retention posture on every
@@ -152,17 +157,22 @@ async def detect(
         faces = apply_nms(detector.detect_faces(frame, max_faces=max_faces))
         backend = detector.acceleration.name if hasattr(detector, "acceleration") else "unknown"
 
+        serialized = [_serialize(f) for f in faces]
+        if _liveness_detector is not None:
+            for face in serialized:
+                face["liveness"] = _liveness_detector.check_single_image(frame)
+
         record_backend(backend)
         logger.info(
             "detection_complete",
             request_id=request_id,
             backend=backend,
             latency_ms=round((time.monotonic() - t0) * 1000, 1),
-            face_count=len(faces),
+            face_count=len(serialized),
             outcome="success",
         )
 
-        return {"count": len(faces), "faces": [_serialize(f) for f in faces]}
+        return {"count": len(serialized), "faces": serialized}
     finally:
         if _slot_taken:
             _detection_slots += 1

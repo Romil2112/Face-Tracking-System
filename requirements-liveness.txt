@@ -1,0 +1,6 @@
+# Optional liveness detection dependency.
+# Install separately — mediapipe only supports Python 3.8–3.12 and pulls in
+# TFLite, which is not needed for the core headless API service.
+#
+# Usage:  pip install -r requirements-liveness.txt
+mediapipe==0.10.21
