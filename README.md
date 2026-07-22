@@ -28,7 +28,7 @@ Writing tests for the camera-failure path turned up a real bug: the recovery cod
 - Headless CLI over image and video files, plus a live webcam tracker
 - Adaptive 1–5 frame skipping under load
 - opencv pinned below 5 (5.x breaks the bundled detector initialization)
-- Bounded concurrency — asyncio semaphore capped by `MAX_CONCURRENT_DETECTIONS`; overflow requests receive HTTP 503 with `Retry-After` rather than queueing indefinitely or crashing
+- Bounded concurrency — slot counter capped by `MAX_CONCURRENT_DETECTIONS`; overflow requests receive HTTP 503 with `Retry-After` rather than queueing indefinitely or crashing
 - 224 pytest tests at 96% line / 93% branch coverage on Python 3.10–3.12
 
 ## Skills Demonstrated
@@ -38,7 +38,7 @@ Writing tests for the camera-failure path turned up a real bug: the recovery cod
 | Hybrid Detection | ResNet-SSD DNN + Haar cascade merged with NMS |
 | Rate Limiting & Abuse Protection | slowapi per-IP limiter, configurable `RATE_LIMIT_PER_MINUTE`, 429 with `retry_after` |
 | Observability & Metrics | Prometheus counters via prometheus-fastapi-instrumentator, structlog JSON per request |
-| Backpressure / Graceful Degradation | asyncio semaphore bounded by `MAX_CONCURRENT_DETECTIONS`, 503 on overflow |
+| Backpressure / Graceful Degradation | Bounded slot counter limited by `MAX_CONCURRENT_DETECTIONS`, 503 on overflow |
 | Liveness Detection | mediapipe EAR blink analysis across frame sequences, opt-in via `LIVENESS_CHECK_ENABLED` |
 | AI-Assisted Triage | Claude Haiku advisory notes on low-confidence detections, opt-in via `?triage=true` |
 
@@ -71,13 +71,13 @@ Each request also emits a structlog JSON record with `request_id`, `backend`, `l
 
 ## Backpressure / Graceful Degradation
 
-An `asyncio.Semaphore` caps simultaneous detections at `MAX_CONCURRENT_DETECTIONS` (default 10). Requests that arrive when all slots are occupied receive HTTP 503 immediately:
+A plain integer slot counter caps simultaneous detections at `MAX_CONCURRENT_DETECTIONS` (default 10). Requests that arrive when all slots are occupied receive HTTP 503 immediately:
 
 ```json
 {"error": "server_busy", "retry_after": 5}
 ```
 
-The semaphore is always released in a `finally` block, so a detector exception never leaks a permit.
+The slot counter is always restored in a `finally` block, so a detector exception never leaks a permit.
 
 ## Liveness Detection
 
