@@ -28,7 +28,78 @@ Writing tests for the camera-failure path turned up a real bug: the recovery cod
 - Headless CLI over image and video files, plus a live webcam tracker
 - Adaptive 1–5 frame skipping under load
 - opencv pinned below 5 (5.x breaks the bundled detector initialization)
-- 204 pytest tests at 96% line / 93% branch coverage on Python 3.10–3.12
+- Bounded concurrency — asyncio semaphore capped by `MAX_CONCURRENT_DETECTIONS`; overflow requests receive HTTP 503 with `Retry-After` rather than queueing indefinitely or crashing
+- 224 pytest tests at 96% line / 93% branch coverage on Python 3.10–3.12
+
+## Skills Demonstrated
+
+| Skill | Implementation |
+|-------|----------------|
+| Hybrid Detection | ResNet-SSD DNN + Haar cascade merged with NMS |
+| Rate Limiting & Abuse Protection | slowapi per-IP limiter, configurable `RATE_LIMIT_PER_MINUTE`, 429 with `retry_after` |
+| Observability & Metrics | Prometheus counters via prometheus-fastapi-instrumentator, structlog JSON per request |
+| Backpressure / Graceful Degradation | asyncio semaphore bounded by `MAX_CONCURRENT_DETECTIONS`, 503 on overflow |
+| Liveness Detection | mediapipe EAR blink analysis across frame sequences, opt-in via `LIVENESS_CHECK_ENABLED` |
+| AI-Assisted Triage | Claude Haiku advisory notes on low-confidence detections, opt-in via `?triage=true` |
+
+## Rate Limiting & Abuse Protection
+
+`POST /detect` enforces a per-IP rate limit using [slowapi](https://github.com/laurentS/slowapi). The limit is configurable via the `RATE_LIMIT_PER_MINUTE` environment variable (default: `30/minute`).
+
+When the limit is exceeded, the API returns HTTP 429:
+
+```json
+{"error": "rate_limit_exceeded", "retry_after": 60}
+```
+
+The `Retry-After` header is also set. Note that 413 (oversized upload) is a separate check unaffected by the rate limiter.
+
+## Observability & Metrics
+
+`GET /metrics` exposes a Prometheus-format endpoint auto-mounted by [prometheus-fastapi-instrumentator](https://github.com/trallnag/prometheus-fastapi-instrumentator).
+
+Two custom counters are emitted per request:
+
+| Metric | Labels | Description |
+|--------|--------|-------------|
+| `face_detection_backend_total` | `backend` | Detections grouped by compute backend (CUDA/OpenCL/CPU) |
+| `face_detection_errors_total` | `error_type` | Errors grouped by type (oversized_upload, decode_failure, server_busy, …) |
+
+Each request also emits a structlog JSON record with `request_id`, `backend`, `latency_ms`, and `face_count` — never face coordinates or image bytes.
+
+> **Note:** Protect `/metrics` at the network or ingress layer — the application does not rate-limit this endpoint.
+
+## Backpressure / Graceful Degradation
+
+An `asyncio.Semaphore` caps simultaneous detections at `MAX_CONCURRENT_DETECTIONS` (default 10). Requests that arrive when all slots are occupied receive HTTP 503 immediately:
+
+```json
+{"error": "server_busy", "retry_after": 5}
+```
+
+The semaphore is always released in a `finally` block, so a detector exception never leaks a permit.
+
+## Liveness Detection
+
+Set `LIVENESS_CHECK_ENABLED=true` to enable the liveness detector. The REST `/detect` endpoint always returns `{"checked": false, "reason": "single_frame_input"}` — blink detection is inherently multi-frame and cannot be performed on a single uploaded image.
+
+The full Eye Aspect Ratio (EAR) blink analysis runs on the webcam path (`main.py`) where a sequence of frames is available. EAR variance across the sequence distinguishes live blinking from a printed photograph.
+
+**Why mediapipe?** It bundles its TFLite models with no native compilation step (unlike dlib, which requires CMake and Boost) and no separate model downloads (unlike OpenCV LBF). It is Apache 2.0 licensed. Install it separately to keep the core API lightweight:
+
+```bash
+pip install -r requirements-liveness.txt
+```
+
+## AI-Assisted Triage
+
+Add `?triage=true` to a `/detect` request to enable Claude Haiku advisory notes on low-confidence detections. Faces below `TRIAGE_CONFIDENCE_THRESHOLD` (default 0.6) receive a `triage_note` field inside their face dict:
+
+```json
+{"rect": [...], "center": [...], "confidence": 0.42, "triage_note": "Low light or partial occlusion may explain the reduced confidence — review the source image."}
+```
+
+Requires `ANTHROPIC_API_KEY`. If the key is unset, triage is silently disabled and all existing response fields are unaffected. This feature follows the same model and retry pattern as the `--ai-summary` flag in the log-analyzer tool for cross-project consistency.
 
 ## Running the Project
 
@@ -88,6 +159,14 @@ python src/cli_detect.py --image portrait.jpg --output result.jpg
 |--------|------|-------------|
 | `GET`  | `/health` | Liveness probe → `{"status": "ok"}` |
 | `POST` | `/detect` | Multipart image upload → `{"count": N, "faces": [{rect, center, confidence}]}` |
+| `GET`  | `/metrics` | Prometheus metrics (protect at ingress — not rate-limited) |
+
+**`POST /detect` query parameters:**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `max_faces` | `10` | Maximum faces to return (1–100) |
+| `triage` | `false` | Attach Claude advisory notes to low-confidence faces (requires `ANTHROPIC_API_KEY`) |
 
 ```bash
 curl -X POST http://localhost:8000/detect -F "file=@face.jpg"
@@ -117,7 +196,7 @@ flowchart LR
 
 ## Tests
 
-204 pytest tests cover the detection logic, NMS, temporal filtering, optical-flow motion analysis, the circuit breaker and recovery paths (including the camera-failure bug above), backend selection, the REST API, and the CLI, at 96% line and 93% branch coverage. They are hermetic: no camera or display is needed, and cv2's GUI and capture calls are mocked. CI runs them on Python 3.10, 3.11, and 3.12. Run them locally with:
+224 pytest tests cover the detection logic, NMS, temporal filtering, optical-flow motion analysis, the circuit breaker and recovery paths (including the camera-failure bug above), backend selection, the REST API, rate limiting, metrics, backpressure, liveness detection, AI triage, and the CLI, at 96% line and 93% branch coverage. They are hermetic: no camera or display is needed, and cv2's GUI and capture calls are mocked. CI runs them on Python 3.10, 3.11, and 3.12. Run them locally with:
 
 ```bash
 python -m pytest tests/ -v
