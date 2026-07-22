@@ -5,3 +5,4 @@ imutils==0.5.4        # main.py imports imutils.video.FPS; needed to import/test
 pytest==9.1.1
 pytest-cov==7.1.0
 httpx2==2.5.0
+httpx>=0.27.0            # starlette testclient hard dependency (added by slowapi's starlette pin)

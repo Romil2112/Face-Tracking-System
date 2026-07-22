@@ -13,10 +13,12 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
+from slowapi.errors import RateLimitExceeded
 
 from face_detector import FaceDetector
 from nms_utils import apply_nms
+from rate_limiter import get_rate_limit, limiter, rate_limit_exceeded_handler
 
 app = FastAPI(
     title="Face Detection API",
@@ -30,6 +32,9 @@ app = FastAPI(
     ),
     version="1.0.0",
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 # Image uploads are decoded, analyzed, and discarded within the request; nothing
 # is written to disk. This header advertises that retention posture on every
@@ -75,7 +80,12 @@ def health() -> dict:
 
 
 @app.post("/detect")
-async def detect(file: UploadFile = File(...), max_faces: int = 10) -> dict:
+@limiter.limit(get_rate_limit)
+async def detect(
+    request: Request,
+    file: UploadFile = File(...),
+    max_faces: int = Query(default=10, ge=1, le=100),
+) -> dict:
     """Detect faces in an uploaded image and return their bounding boxes as JSON.
 
     The uploaded image is processed in memory and discarded once the response is
