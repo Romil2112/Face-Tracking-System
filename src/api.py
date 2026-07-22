@@ -16,6 +16,7 @@ import time
 import cv2
 import numpy as np
 from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 
 from face_detector import FaceDetector
@@ -49,6 +50,12 @@ app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 configure_structlog()
 _instrumentator = build_instrumentator()
 _instrumentator.instrument(app).expose(app)
+
+MAX_CONCURRENT_DETECTIONS = int(os.environ.get("MAX_CONCURRENT_DETECTIONS", "10"))
+# Plain integer counter — no asyncio.Semaphore needed for non-blocking backpressure.
+# In asyncio there is no preemption between two non-awaited statements, so the
+# check-then-decrement below is atomic within a single event loop turn.
+_detection_slots: int = MAX_CONCURRENT_DETECTIONS
 
 # Image uploads are decoded, analyzed, and discarded within the request; nothing
 # is written to disk. This header advertises that retention posture on every
@@ -110,36 +117,52 @@ async def detect(
     request_id = new_request_id()
     t0 = time.monotonic()
 
-    # Read at most one byte past the cap so an oversized upload is rejected
-    # without pulling the whole payload into memory.
-    data = await file.read(MAX_UPLOAD_BYTES + 1)
-    if not data:
-        record_error("empty_file")
-        raise HTTPException(status_code=400, detail="Empty file")
-    if len(data) > MAX_UPLOAD_BYTES:
-        record_error("oversized_upload")
-        raise HTTPException(
-            status_code=413,
-            detail=f"Image exceeds {MAX_UPLOAD_BYTES} bytes",
+    global _detection_slots
+    _slot_taken = False
+    try:
+        if _detection_slots <= 0:
+            record_error("server_busy")
+            return JSONResponse(
+                status_code=503,
+                content={"error": "server_busy", "retry_after": 5},
+                headers={"Retry-After": "5"},
+            )
+        _detection_slots -= 1
+        _slot_taken = True
+
+        # Read at most one byte past the cap so an oversized upload is rejected
+        # without pulling the whole payload into memory.
+        data = await file.read(MAX_UPLOAD_BYTES + 1)
+        if not data:
+            record_error("empty_file")
+            raise HTTPException(status_code=400, detail="Empty file")
+        if len(data) > MAX_UPLOAD_BYTES:
+            record_error("oversized_upload")
+            raise HTTPException(
+                status_code=413,
+                detail=f"Image exceeds {MAX_UPLOAD_BYTES} bytes",
+            )
+
+        frame = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+        if frame is None:
+            record_error("decode_failure")
+            raise HTTPException(status_code=400, detail="Could not decode image")
+
+        detector = get_detector()
+        faces = apply_nms(detector.detect_faces(frame, max_faces=max_faces))
+        backend = detector.acceleration.name if hasattr(detector, "acceleration") else "unknown"
+
+        record_backend(backend)
+        logger.info(
+            "detection_complete",
+            request_id=request_id,
+            backend=backend,
+            latency_ms=round((time.monotonic() - t0) * 1000, 1),
+            face_count=len(faces),
+            outcome="success",
         )
 
-    frame = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
-    if frame is None:
-        record_error("decode_failure")
-        raise HTTPException(status_code=400, detail="Could not decode image")
-
-    detector = get_detector()
-    faces = apply_nms(detector.detect_faces(frame, max_faces=max_faces))
-    backend = detector.acceleration.name if hasattr(detector, "acceleration") else "unknown"
-
-    record_backend(backend)
-    logger.info(
-        "detection_complete",
-        request_id=request_id,
-        backend=backend,
-        latency_ms=round((time.monotonic() - t0) * 1000, 1),
-        face_count=len(faces),
-        outcome="success",
-    )
-
-    return {"count": len(faces), "faces": [_serialize(f) for f in faces]}
+        return {"count": len(faces), "faces": [_serialize(f) for f in faces]}
+    finally:
+        if _slot_taken:
+            _detection_slots += 1
