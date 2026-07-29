@@ -10,3 +10,9 @@ venv/
 htmlcov/
 .DS_Store
 .claude/
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+*.tfvars
+
