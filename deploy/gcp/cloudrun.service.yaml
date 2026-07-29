@@ -1,0 +1,38 @@
+# Apply with: gcloud run services replace deploy/gcp/cloudrun.service.yaml --region us-central1
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: face-tracking
+  annotations:
+    run.googleapis.com/ingress: all
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "20"
+        run.googleapis.com/execution-environment: gen2
+    spec:
+      containers:
+        - image: us-central1-docker.pkg.dev/PROJECT_ID/face-tracking/app:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: MAX_CONCURRENT_DETECTIONS
+              value: "10"
+            - name: MAX_UPLOAD_BYTES
+              value: "10485760"
+            - name: TRIAGE_CONFIDENCE_THRESHOLD
+              value: "0.6"
+            - name: RATE_LIMIT_PER_MINUTE
+              value: "30/minute"
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: anthropic-api-key
+                  key: latest
+                  optional: true
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1Gi
