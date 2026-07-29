@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: face-tracking
+  namespace: security-tools
+  labels:
+    app.kubernetes.io/name: face-tracking
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: face-tracking
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: face-tracking
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: /metrics
+    spec:
+      containers:
+        - name: face-tracking
+          image: us-central1-docker.pkg.dev/PROJECT_ID/face-tracking/app:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: MAX_CONCURRENT_DETECTIONS
+              value: "10"
+            - name: MAX_UPLOAD_BYTES
+              value: "10485760"
+            - name: TRIAGE_CONFIDENCE_THRESHOLD
+              value: "0.6"
+            - name: RATE_LIMIT_PER_MINUTE
+              value: "30/minute"
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: face-tracking-secrets
+                  key: ANTHROPIC_API_KEY
+                  optional: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 2000m
+              memory: 1Gi
