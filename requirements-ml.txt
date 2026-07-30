@@ -1,0 +1,6 @@
+# Optional ML inference dependencies (YOLO face detection).
+# Not required for the core API — install alongside requirements-api.txt
+# for the full YOLO-primary detector. Without these, face detection falls
+# back to Haar Cascade and all YOLO tests are skipped automatically.
+torch>=2.0.0
+ultralytics>=8.0.0

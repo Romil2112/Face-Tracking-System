@@ -9,5 +9,3 @@ slowapi==0.1.9
 prometheus-fastapi-instrumentator==7.1.0
 structlog==25.3.0
 anthropic==0.117.0
-torch>=2.0.0
-ultralytics>=8.0.0

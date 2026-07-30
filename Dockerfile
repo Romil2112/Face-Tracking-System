@@ -8,8 +8,8 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY requirements-api.txt .
-RUN pip install --no-cache-dir -r requirements-api.txt
+COPY requirements-api.txt requirements-ml.txt ./
+RUN pip install --no-cache-dir -r requirements-api.txt -r requirements-ml.txt
 
 # Pre-download YOLO nano face weights (~6 MB) at build time so the container
 # starts without requiring any network I/O at inference time.
