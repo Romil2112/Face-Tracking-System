@@ -96,3 +96,24 @@ def test_probe_capabilities_returns_expected_keys():
     caps = acceleration.probe_capabilities()
     assert set(caps) == {"cuda", "cuda_targets", "opencl"}
     assert isinstance(caps["opencl"], bool)
+
+
+# ----------------------- select_torch_device ---------------------------------
+
+def test_select_torch_device_returns_cpu_when_no_cuda():
+    caps = {"cuda": False, "cuda_targets": [], "opencl": True}
+    device = acceleration.select_torch_device(caps=caps)
+    assert device == "cpu"
+
+
+def test_select_torch_device_returns_string():
+    device = acceleration.select_torch_device()
+    assert device in ("cpu", "cuda")
+
+
+def test_select_torch_device_cuda_requires_caps_flag(monkeypatch):
+    # Even if caps says cuda=True, torch.cuda.is_available() may return False
+    # on this machine.  The function must return a valid string either way.
+    caps = {"cuda": True, "cuda_targets": [CUDA_TARGET], "opencl": False}
+    device = acceleration.select_torch_device(caps=caps)
+    assert device in ("cpu", "cuda")

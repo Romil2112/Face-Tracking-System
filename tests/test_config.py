@@ -8,7 +8,7 @@ import config
 
 def test_confidence_thresholds_in_unit_range():
     for value in (
-        config.DNN_CONFIDENCE_THRESHOLD,
+        config.YOLO_CONFIDENCE_THRESHOLD,
         config.MINIMUM_CONFIDENCE,
         config.NMS_THRESHOLD,
     ):

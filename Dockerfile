@@ -11,6 +11,10 @@ WORKDIR /app
 COPY requirements-api.txt .
 RUN pip install --no-cache-dir -r requirements-api.txt
 
+# Pre-download YOLO nano face weights (~6 MB) at build time so the container
+# starts without requiring any network I/O at inference time.
+RUN python -c "from ultralytics import YOLO; YOLO('yolov8n-face.pt')"
+
 COPY . .
 
 EXPOSE 8000

@@ -5,7 +5,6 @@ This module contains the main execution logic for the face tracking application.
 """
 
 import argparse
-import concurrent.futures
 import logging
 import os
 import sys
@@ -92,16 +91,14 @@ def validate_configuration() -> None:
     """Validate critical configuration parameters."""
     required_files = [
         (config.CASCADE_PATH, "Haar Cascade XML"),
-        (config.DNN_MODEL_PATH, "DNN Model"),
-        (config.DNN_CONFIG_PATH, "DNN Config")
     ]
 
     for path, name in required_files:
         if not os.path.exists(path):
             raise FileNotFoundError(f"{name} file not found at {path}")
 
-    if not 0 < config.DNN_CONFIDENCE_THRESHOLD <= 1:
-        raise ValueError("DNN confidence threshold must be between 0 and 1")
+    if not 0 < config.YOLO_CONFIDENCE_THRESHOLD <= 1:
+        raise ValueError("YOLO confidence threshold must be between 0 and 1")
 
     if config.CAMERA_INDEX < 0:
         raise ValueError("Camera index cannot be negative")
@@ -122,16 +119,10 @@ def _validate_cuda_backend() -> None:
 
 def _detect_and_filter(frame: np.ndarray, face_detector: FaceDetector,
                        args: dict[str, Any]) -> list[dict]:
-    """Run DNN + Haar in parallel, merge, NMS, confidence-filter, cap at max_faces."""
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        dnn_future = executor.submit(face_detector.detect_faces_dnn, frame)
-        haar_future = executor.submit(face_detector.detect_faces_haar, frame)
-        dnn_faces = dnn_future.result()
-        haar_faces = haar_future.result()
-
-    faces = apply_nms(dnn_faces + haar_faces, config.NMS_THRESHOLD)
-    faces = [f for f in faces if f['confidence'] >= config.MINIMUM_CONFIDENCE]
-    return faces[:args['max_faces']]
+    """Run YOLO detection (Haar fallback), apply NMS, confidence-filter, cap at max_faces."""
+    faces = apply_nms(face_detector.detect_faces(frame), config.NMS_THRESHOLD)
+    faces = [f for f in faces if f["confidence"] >= config.MINIMUM_CONFIDENCE]
+    return faces[:args["max_faces"]]
 
 
 def _apply_motion_gate(faces: list[dict], prev_frame: np.ndarray,
@@ -294,12 +285,10 @@ def main() -> None:
 
         # Initialize components
         face_detector = FaceDetector(
-            dnn_model_path=config.DNN_MODEL_PATH,
-            dnn_config_path=config.DNN_CONFIG_PATH,
-            cascade_path=config.CASCADE_PATH,
+            cascade_path=args['cascade'],
             scale_factor=args['scale_factor'],
             min_neighbors=args['min_neighbors'],
-            min_size=config.MIN_SIZE
+            min_size=config.MIN_SIZE,
         )
 
         video_capture = initialize_video_capture(

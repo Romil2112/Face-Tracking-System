@@ -118,6 +118,25 @@ def apply_to_net(net, accel):
     return accel
 
 
+def select_torch_device(caps=None) -> str:
+    """Return 'cuda' if a CUDA-capable device is available for PyTorch, else 'cpu'.
+
+    PyTorch does not use the OpenCL path, so only CUDA vs CPU is relevant here.
+    Reuses probe_capabilities() for CUDA detection, then cross-checks with
+    torch.cuda.is_available() when torch is importable.
+    """
+    caps = caps if caps is not None else probe_capabilities()
+    if caps.get("cuda"):
+        try:
+            import torch
+            if torch.cuda.is_available():
+                logger.info("CUDA device available for PyTorch")
+                return "cuda"
+        except ImportError:
+            logger.debug("torch not installed; cannot confirm CUDA for PyTorch")
+    return "cpu"
+
+
 def to_umat(frame, accel):
     """Wrap a frame in a cv2.UMat when OpenCL is active so downstream OpenCV ops
     execute on the GPU via the T-API. No-op (returns the frame) otherwise."""

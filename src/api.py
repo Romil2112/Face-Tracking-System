@@ -36,7 +36,7 @@ from triage import TRIAGE_CONFIDENCE_THRESHOLD, triage_detection
 app = FastAPI(
     title="Face Detection API",
     description=(
-        "Real-time face detection (ResNet-SSD DNN + Haar fallback) exposed over HTTP. "
+        "Real-time face detection (YOLOv8-nano + Haar Cascade fallback) exposed over HTTP. "
         "Uploaded images are processed **in memory only** and are not persisted. "
         "This is a free, open-source demonstration / trial project — not a certified "
         "commercial biometric platform. Use it only with images you own or are "
@@ -157,7 +157,7 @@ async def detect(
 
         detector = get_detector()
         faces = apply_nms(detector.detect_faces(frame, max_faces=max_faces))
-        backend = detector.acceleration.name if hasattr(detector, "acceleration") else "unknown"
+        backend = detector.backend_name() if hasattr(detector, "backend_name") else "unknown"
 
         serialized = [_serialize(f) for f in faces]
         if _liveness_detector is not None:

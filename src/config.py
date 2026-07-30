@@ -18,11 +18,9 @@ SCALE_FACTOR = 1.1
 MIN_NEIGHBORS = 4
 MIN_SIZE = (30, 30)
 
-# DNN face detection
-DNN_MODEL_PATH = os.path.join(os.path.dirname(__file__), 'models', 'res10_300x300_ssd_iter_140000.caffemodel')
-DNN_CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'models', 'deploy.prototxt')
-DNN_CONFIDENCE_THRESHOLD = 0.7 # Reduce false positives
-DNN_INPUT_SIZE = (300, 300)
+# YOLO face detection
+YOLO_MODEL_NAME = "yolov8n-face.pt"
+YOLO_CONFIDENCE_THRESHOLD = 0.5
 
 # Haar Cascade
 HAAR_SCALE_FACTOR = 1.2 # Faster pyramid scaling

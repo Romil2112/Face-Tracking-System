@@ -76,7 +76,7 @@ def test_validate_configuration_missing_file(monkeypatch):
 
 
 def test_validate_configuration_bad_threshold(monkeypatch):
-    monkeypatch.setattr(main.config, "DNN_CONFIDENCE_THRESHOLD", 1.5)
+    monkeypatch.setattr(main.config, "YOLO_CONFIDENCE_THRESHOLD", 1.5)
     with pytest.raises(ValueError, match="confidence threshold"):
         main.validate_configuration()
 
