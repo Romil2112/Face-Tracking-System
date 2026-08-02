@@ -177,7 +177,7 @@ Interactive API docs are generated at `http://localhost:8000/docs`.
 
 ## Architecture diagram
 
-Each frame runs the DNN and Haar detectors in parallel, merges and de-duplicates the results with NMS, optionally gates them by motion, and smooths across frames with the temporal filter before drawing. A circuit-breaker/retry layer wraps the camera and detectors so a transient failure degrades (CUDA → OpenCL → CPU, frame skipping) instead of crashing.
+Each frame runs YOLOv8-nano first; if YOLO fails or finds nothing, the Haar cascade runs as a last-resort fallback. NMS de-duplicates boxes, an optional motion gate filters low-movement candidates, and the 5-frame temporal filter smooths detections before drawing. A circuit-breaker/retry layer wraps the camera and detectors so a transient failure degrades (CUDA → OpenCL → CPU, frame skipping) instead of crashing.
 
 ```mermaid
 flowchart LR
