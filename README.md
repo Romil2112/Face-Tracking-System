@@ -1,6 +1,6 @@
 # Real-time face tracking
 
-Real-time face tracking is a computer-vision service that detects and tracks faces in a webcam stream, in image or video files, or over an HTTP API. It runs a ResNet-SSD network and a Haar cascade together, smooths detections across frames, and keeps running when a camera or GPU backend fails instead of crashing. It returns face boxes with center points and confidence scores as JSON, or draws them on a live or annotated frame. I built it with Parshav.
+Real-time face tracking is a computer-vision service that detects and tracks faces in a webcam stream, in image or video files, or over an HTTP API. It runs YOLOv8-nano as the primary detector with a Haar cascade last-resort fallback, smooths detections across frames, and keeps running when a camera or GPU backend fails instead of crashing. It returns face boxes with center points and confidence scores as JSON, or draws them on a live or annotated frame. I built it with Parshav.
 
 ## Demo
 
@@ -10,32 +10,32 @@ Real-time face detection demo — live webcam feed with bounding boxes, confiden
 
 ## How it works
 
-Each frame goes through two detectors at once. The ResNet-SSD network is accurate on frontal faces but misses some at sharp angles; the Haar cascade picks up a different set. Their boxes are merged with non-maximum suppression, which also drops the duplicate overlapping boxes so one face is reported once. A motion gate and a temporal filter follow: the temporal filter holds a candidate across a 5-frame window and only reports it once it shows up consistently, which clears out most one-frame false positives before they reach the output.
+Each frame runs YOLOv8-nano (primary); if YOLO fails to initialize or raises at runtime, the Haar cascade takes over as a last-resort fallback. Non-maximum suppression de-duplicates overlapping boxes. A motion gate and a temporal filter follow: the temporal filter holds a candidate across a 5-frame window and only reports it once it shows up consistently, which clears out most one-frame false positives before they reach the output.
 
-Detection picks a backend at startup and falls back on failure. It tries CUDA first; if there is no NVIDIA GPU or the CUDA backend fails to initialize, it drops to OpenCL through OpenCV's T-API, which runs on Intel, AMD, or Apple GPUs; if that is unavailable it runs on CPU. A circuit-breaker and retry layer wraps the camera and detectors, so a transient failure degrades (backend fallback, frame skipping) instead of stopping the stream. The detectors come from OpenCV, and `requirements` pins opencv below 5 because OpenCV 5.x breaks initialization of the bundled ResNet-SSD and Haar models, so on 5.x detection never starts.
+Detection picks a hardware backend at startup and falls back on failure. It tries CUDA first; if there is no NVIDIA GPU or the CUDA backend fails to initialize, it drops to OpenCL through OpenCV's T-API, which runs on Intel, AMD, or Apple GPUs; if that is unavailable it runs on CPU. A circuit-breaker and retry layer wraps the camera and detectors, so a transient failure degrades (backend fallback, frame skipping) instead of stopping the stream.
 
 Writing tests for the camera-failure path turned up a real bug: the recovery code called `ErrorHandler.handle_camera_error` without an instance bound to it, so every camera failure raised an `AttributeError` instead of resetting the camera. The fix gave the capture loop its own `ErrorHandler` instance, and the test that caught it forces a camera failure and checks that recovery runs.
 
 ## Features
 
-- Hybrid detector: ResNet-SSD (300x300) DNN plus Haar cascade, merged with NMS
+- **YOLOv8-nano primary detector** with automatic fallback to Haar cascade if YOLO is unavailable or fails at runtime
 - 5-frame temporal filter for stable tracking and fewer one-frame false positives
 - Optical-flow motion gate (optional)
 - Hardware backend auto-selection: CUDA → OpenCL (T-API) → CPU
 - Circuit-breaker and exponential-backoff retry around the camera and detectors
-- Camera reconnect and DNN-to-Haar detector fallback on failure
 - FastAPI service: `POST /detect` (image upload → JSON faces) and `GET /health`
 - Headless CLI over image and video files, plus a live webcam tracker
 - Adaptive 1–5 frame skipping under load
-- opencv pinned below 5 (5.x breaks the bundled detector initialization)
-- Bounded concurrency — slot counter capped by `MAX_CONCURRENT_DETECTIONS`; overflow requests receive HTTP 503 with `Retry-After` rather than queueing indefinitely or crashing
+- Bounded concurrency — slot counter capped by `MAX_CONCURRENT_DETECTIONS`; overflow requests receive HTTP 503 with `Retry-After`
+- **Kubernetes HPA** — `deploy/k8s/hpa.yaml` scales on CPU and on the custom `face_detection_backend_per_second` metric (via prometheus-adapter)
+- **GCP deployment** — `deploy/gcp/` (Cloud Run service YAML + Cloud Build pipeline) and `terraform/gcp/` provision the full stack
 - 224 pytest tests at 96% line / 93% branch coverage on Python 3.10–3.12
 
 ## Skills Demonstrated
 
 | Skill | Implementation |
 |-------|----------------|
-| Hybrid Detection | ResNet-SSD DNN + Haar cascade merged with NMS |
+| Hybrid Detection | YOLOv8-nano primary + Haar cascade fallback; NMS de-duplication |
 | Rate Limiting & Abuse Protection | slowapi per-IP limiter, configurable `RATE_LIMIT_PER_MINUTE`, 429 with `retry_after` |
 | Observability & Metrics | Prometheus counters via prometheus-fastapi-instrumentator, structlog JSON per request |
 | Backpressure / Graceful Degradation | Bounded slot counter limited by `MAX_CONCURRENT_DETECTIONS`, 503 on overflow |
@@ -182,15 +182,14 @@ Each frame runs the DNN and Haar detectors in parallel, merges and de-duplicates
 ```mermaid
 flowchart LR
     CAM[Camera / image / video] --> ACQ[VideoCapture<br/>pacing + recovery]
-    ACQ --> PAR{parallel}
-    PAR --> DNN[ResNet-SSD DNN]
-    PAR --> HAAR[Haar cascade]
-    DNN --> NMS[NMS merge]
+    ACQ --> YOLO[YOLOv8-nano<br/>primary]
+    YOLO -->|faces found| NMS[NMS de-dup]
+    YOLO -->|YOLO failed| HAAR[Haar cascade<br/>fallback]
     HAAR --> NMS
     NMS --> MOT[Motion gate<br/>optional]
     MOT --> TMP[Temporal filter<br/>5-frame consistency]
     TMP --> VIS[Visualizer / JSON]
-    ACCEL[Acceleration<br/>CUDA→OpenCL→CPU] -.-> DNN
+    ACCEL[Acceleration<br/>CUDA→OpenCL→CPU] -.-> YOLO
     ACCEL -.-> HAAR
 ```
 
