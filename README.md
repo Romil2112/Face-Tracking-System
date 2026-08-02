@@ -150,7 +150,7 @@ The tracker auto-selects the fastest available backend at startup (CUDA → Open
 ### Option D — Headless CLI (image or video file, no server)
 
 ```bash
-python src/cli_detect.py --image portrait.jpg --output result.jpg
+python src/cli_detect.py --image portrait.jpg --out result.jpg
 ```
 
 ## API reference
@@ -184,7 +184,7 @@ flowchart LR
     CAM[Camera / image / video] --> ACQ[VideoCapture<br/>pacing + recovery]
     ACQ --> YOLO[YOLOv8-nano<br/>primary]
     YOLO -->|faces found| NMS[NMS de-dup]
-    YOLO -->|YOLO failed| HAAR[Haar cascade<br/>fallback]
+    YOLO -->|no detections / failed| HAAR[Haar cascade<br/>fallback]
     HAAR --> NMS
     NMS --> MOT[Motion gate<br/>optional]
     MOT --> TMP[Temporal filter<br/>5-frame consistency]
