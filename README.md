@@ -10,7 +10,7 @@ Real-time face detection demo — live webcam feed with bounding boxes, confiden
 
 ## How it works
 
-Each frame runs YOLOv8-nano (primary); if YOLO fails to initialize or raises at runtime, the Haar cascade takes over as a last-resort fallback. Non-maximum suppression de-duplicates overlapping boxes. A motion gate and a temporal filter follow: the temporal filter holds a candidate across a 5-frame window and only reports it once it shows up consistently, which clears out most one-frame false positives before they reach the output.
+Each frame runs YOLOv8-nano (primary); if YOLO returns no detections or is unavailable, the Haar cascade runs as a last-resort fallback. Non-maximum suppression de-duplicates overlapping boxes. A motion gate and a temporal filter follow: the temporal filter holds a candidate across a 5-frame window and only reports it once it shows up consistently, which clears out most one-frame false positives before they reach the output.
 
 Detection picks a hardware backend at startup and falls back on failure. It tries CUDA first; if there is no NVIDIA GPU or the CUDA backend fails to initialize, it drops to OpenCL through OpenCV's T-API, which runs on Intel, AMD, or Apple GPUs; if that is unavailable it runs on CPU. A circuit-breaker and retry layer wraps the camera and detectors, so a transient failure degrades (backend fallback, frame skipping) instead of stopping the stream.
 
@@ -18,7 +18,7 @@ Writing tests for the camera-failure path turned up a real bug: the recovery cod
 
 ## Features
 
-- **YOLOv8-nano primary detector** with automatic fallback to Haar cascade if YOLO is unavailable or fails at runtime
+- **YOLOv8-nano primary detector** with automatic fallback to Haar cascade when YOLO is unavailable or returns no detections
 - 5-frame temporal filter for stable tracking and fewer one-frame false positives
 - Optical-flow motion gate (optional)
 - Hardware backend auto-selection: CUDA → OpenCL (T-API) → CPU
