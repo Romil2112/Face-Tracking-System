@@ -71,7 +71,7 @@ Each request also emits a structlog JSON record with `request_id`, `backend`, `l
 
 ## Backpressure / Graceful Degradation
 
-A plain integer slot counter caps simultaneous detections at `MAX_CONCURRENT_DETECTIONS` (default 10). Requests that arrive when all slots are occupied receive HTTP 503 immediately:
+A plain integer slot counter caps simultaneous detections at `MAX_CONCURRENT_DETECTIONS` (default 10). The maximum accepted upload size is `MAX_UPLOAD_BYTES` (default 10 MB); uploads over this limit receive HTTP 413 immediately. Requests that arrive when all slots are occupied receive HTTP 503 immediately:
 
 ```json
 {"error": "server_busy", "retry_after": 5}
