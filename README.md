@@ -29,7 +29,7 @@ Writing tests for the camera-failure path turned up a real bug: the recovery cod
 - Bounded concurrency — slot counter capped by `MAX_CONCURRENT_DETECTIONS`; overflow requests receive HTTP 503 with `Retry-After`
 - **Kubernetes HPA** — `deploy/k8s/hpa.yaml` scales on CPU and on the custom `face_detection_backend_per_second` metric (via prometheus-adapter)
 - **GCP deployment** — `deploy/gcp/` (Cloud Run service YAML + Cloud Build pipeline) and `terraform/gcp/` provision the full stack
-- 224 pytest tests at 96% line / 93% branch coverage on Python 3.10–3.12
+- 226 pytest tests at 96% line / 93% branch coverage on Python 3.10–3.12
 
 ## Skills Demonstrated
 
@@ -195,7 +195,7 @@ flowchart LR
 
 ## Tests
 
-224 pytest tests cover the detection logic, NMS, temporal filtering, optical-flow motion analysis, the circuit breaker and recovery paths (including the camera-failure bug above), backend selection, the REST API, rate limiting, metrics, backpressure, liveness detection, AI triage, and the CLI, at 96% line and 93% branch coverage. They are hermetic: no camera or display is needed, and cv2's GUI and capture calls are mocked. CI runs them on Python 3.10, 3.11, and 3.12. Run them locally with:
+226 pytest tests cover the detection logic, NMS, temporal filtering, optical-flow motion analysis, the circuit breaker and recovery paths (including the camera-failure bug above), backend selection, the REST API, rate limiting, metrics, backpressure, liveness detection, AI triage (including explicit-timeout regression and graceful-retry-on-timeout), and the CLI, at 96% line and 93% branch coverage. They are hermetic: no camera or display is needed, and cv2's GUI and capture calls are mocked. CI runs them on Python 3.10, 3.11, and 3.12. Run them locally with:
 
 ```bash
 python -m pytest tests/ -v
