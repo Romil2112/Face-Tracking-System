@@ -99,7 +99,7 @@ Add `?triage=true` to a `/detect` request to enable Claude Haiku advisory notes 
 {"rect": [...], "center": [...], "confidence": 0.42, "triage_note": "Low light or partial occlusion may explain the reduced confidence — review the source image."}
 ```
 
-Requires `ANTHROPIC_API_KEY`. If the key is unset, triage is silently disabled and all existing response fields are unaffected. This feature follows the same model and retry pattern as the `--ai-summary` flag in the log-analyzer tool for cross-project consistency.
+Requires `ANTHROPIC_API_KEY`. If the key is unset, triage is silently disabled and all existing response fields are unaffected. Each API call uses a 30-second timeout with up to 3 retries (exponential backoff: 0.5 s, 1.0 s); worst-case blocking per face is ~91 s before `triage_note` is omitted. If the API is unreachable, the `/detect` endpoint still returns normally — triage failure is never surfaced as an HTTP error.
 
 ## Running the Project
 

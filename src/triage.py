@@ -39,6 +39,7 @@ except ImportError:
 _MODEL = "claude-haiku-4-5-20251001"
 _MAX_TOKENS = 200
 _MAX_RETRIES = 3
+_TRIAGE_TIMEOUT = 30  # seconds; well under the SDK's 600s default
 
 
 def triage_detection(face: dict) -> str | None:
@@ -64,6 +65,7 @@ def triage_detection(face: dict) -> str | None:
                 model=_MODEL,
                 max_tokens=_MAX_TOKENS,
                 messages=[{"role": "user", "content": prompt}],
+                timeout=_TRIAGE_TIMEOUT,
             )
             return msg.content[0].text.strip()
         except Exception as exc:
