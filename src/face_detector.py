@@ -12,7 +12,7 @@ import numpy as np
 
 import config
 from error_handling import ErrorHandler, retry
-from yolo_detector import YOLO_AVAILABLE, YOLOFaceDetector
+from yolo_detector import YOLOFaceDetector
 
 logger = logging.getLogger(__name__)
 

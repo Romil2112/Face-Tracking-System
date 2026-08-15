@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 
 from face_detector import FaceDetector
+from liveness import LIVENESS_CHECK_ENABLED, LivenessDetector
 from metrics import (
     build_instrumentator,
     configure_structlog,
@@ -29,7 +30,6 @@ from metrics import (
     record_error,
 )
 from nms_utils import apply_nms
-from liveness import LIVENESS_CHECK_ENABLED, LivenessDetector
 from rate_limiter import get_rate_limit, limiter, rate_limit_exceeded_handler
 from triage import TRIAGE_CONFIDENCE_THRESHOLD, triage_detection
 
