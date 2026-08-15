@@ -145,7 +145,7 @@ python src/main.py --width 1280 --height 720
 # press Q to quit
 ```
 
-The tracker auto-selects the fastest available backend at startup (CUDA → OpenCL → CPU) and prints which one it chose.
+The tracker auto-selects the fastest available backend at startup (CUDA → OpenCL → CPU) and prints which one it chose. When OpenCL is selected, compiled kernels are cached to disk to avoid recompilation on subsequent runs. The cache directory defaults to `~/.cache/opencv_cache_<YYYY-MM-DD>` and can be overridden with `OPENCV_OCL_CACHE_DIR`.
 
 ### Option D — Headless CLI (image or video file, no server)
 
