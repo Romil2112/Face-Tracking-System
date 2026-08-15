@@ -1,7 +1,6 @@
 """Tests for liveness detection integration."""
 import cv2
 import numpy as np
-import pytest
 from fastapi.testclient import TestClient
 
 import api

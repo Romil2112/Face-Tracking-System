@@ -1,9 +1,9 @@
 """Tests for Claude triage integration on POST /detect?triage=true."""
+from unittest.mock import MagicMock
+
 import cv2
 import numpy as np
-import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import MagicMock, patch
 
 import api
 import triage

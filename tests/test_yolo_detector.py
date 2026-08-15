@@ -11,7 +11,6 @@ import pytest
 import yolo_detector
 from yolo_detector import YOLO_AVAILABLE
 
-
 # ---------------------------------------------------------------------------
 # Minimal stand-ins for ultralytics result objects
 # ---------------------------------------------------------------------------

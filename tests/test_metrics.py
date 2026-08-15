@@ -1,7 +1,6 @@
 """Tests for Prometheus metrics and structlog observability."""
 import cv2
 import numpy as np
-import pytest
 import structlog.testing
 from fastapi.testclient import TestClient
 
