@@ -20,7 +20,7 @@ MIN_SIZE = (30, 30)
 
 # YOLO face detection
 YOLO_MODEL_NAME = os.path.join(os.path.dirname(__file__), '..', 'yolov8n-face.pt')
-YOLO_CONFIDENCE_THRESHOLD = 0.5
+YOLO_CONFIDENCE_THRESHOLD = 0.30
 
 # Haar Cascade
 HAAR_SCALE_FACTOR = 1.2 # Faster pyramid scaling
