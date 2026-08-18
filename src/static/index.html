@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Face Detection</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #0f1117;
+    color: #e0e0e0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+  }
+  h1 {
+    font-size: 1.8rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #fff;
+  }
+  .subtitle {
+    font-size: 0.9rem;
+    color: #888;
+    margin-bottom: 36px;
+  }
+  .card {
+    background: #1a1d27;
+    border: 1px solid #2a2d3a;
+    border-radius: 12px;
+    padding: 32px;
+    width: 100%;
+    max-width: 720px;
+  }
+  .upload-zone {
+    border: 2px dashed #3a3d4a;
+    border-radius: 10px;
+    padding: 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    margin-bottom: 20px;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: #4f8ef7;
+    background: rgba(79, 142, 247, 0.05);
+  }
+  .upload-zone input { display: none; }
+  .upload-icon { font-size: 2.5rem; margin-bottom: 10px; }
+  .upload-zone p { color: #888; font-size: 0.9rem; }
+  .upload-zone p span { color: #4f8ef7; }
+  .controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  label.small { font-size: 0.85rem; color: #aaa; }
+  input[type=number] {
+    width: 70px;
+    background: #0f1117;
+    border: 1px solid #2a2d3a;
+    border-radius: 6px;
+    color: #fff;
+    padding: 6px 10px;
+    font-size: 0.9rem;
+  }
+  button {
+    background: #4f8ef7;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 28px;
+    font-size: 0.95rem;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.2s;
+    margin-left: auto;
+  }
+  button:hover { background: #3a78e0; }
+  button:disabled { background: #333; cursor: default; }
+  #status {
+    font-size: 0.85rem;
+    color: #888;
+    min-height: 20px;
+    margin-bottom: 16px;
+    text-align: center;
+  }
+  #status.error { color: #f07070; }
+  .result-wrap {
+    position: relative;
+    display: none;
+    margin-top: 20px;
+  }
+  canvas {
+    width: 100%;
+    border-radius: 8px;
+    display: block;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #4f8ef7;
+    color: #fff;
+    border-radius: 20px;
+    padding: 4px 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .face-list {
+    margin-top: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .face-chip {
+    background: #0f1117;
+    border: 1px solid #2a2d3a;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    color: #ccc;
+  }
+  .face-chip strong { color: #4f8ef7; }
+</style>
+</head>
+<body>
+
+<h1>Face Detection</h1>
+<p class="subtitle">YOLOv8-nano · Haar Cascade fallback · Real-time inference</p>
+
+<div class="card">
+  <div class="upload-zone" id="dropZone">
+    <input type="file" id="fileInput" accept="image/*">
+    <div class="upload-icon">🖼️</div>
+    <p><span>Click to upload</span> or drag & drop</p>
+    <p>JPEG · PNG · WEBP</p>
+  </div>
+
+  <div class="controls">
+    <label class="small" for="maxFaces">Max faces</label>
+    <input type="number" id="maxFaces" value="10" min="1" max="100">
+    <button id="runBtn" disabled>Detect Faces</button>
+  </div>
+
+  <div id="status"></div>
+
+  <div class="result-wrap" id="resultWrap">
+    <div id="badge" class="badge"></div>
+    <canvas id="canvas"></canvas>
+    <div class="face-list" id="faceList"></div>
+  </div>
+</div>
+
+<script>
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const runBtn   = document.getElementById('runBtn');
+const status   = document.getElementById('status');
+const canvas   = document.getElementById('canvas');
+const ctx      = canvas.getContext('2d');
+const resultWrap = document.getElementById('resultWrap');
+const badge    = document.getElementById('badge');
+const faceList = document.getElementById('faceList');
+
+let selectedFile = null;
+const COLORS = ['#4f8ef7','#f7874f','#4ff7a0','#f74f9e','#f7e24f','#a04ff7','#4ff7f0','#f74f4f'];
+
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => setFile(e.target.files[0]));
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); setFile(e.dataTransfer.files[0]); });
+
+function setFile(file) {
+  if (!file) return;
+  selectedFile = file;
+  runBtn.disabled = false;
+  status.textContent = `Ready: ${file.name}`;
+  status.className = '';
+  resultWrap.style.display = 'none';
+}
+
+runBtn.addEventListener('click', async () => {
+  if (!selectedFile) return;
+  runBtn.disabled = true;
+  status.textContent = 'Detecting…';
+  status.className = '';
+
+  const form = new FormData();
+  form.append('file', selectedFile);
+  const maxFaces = document.getElementById('maxFaces').value;
+
+  let data;
+  try {
+    const res = await fetch(`/detect?max_faces=${maxFaces}&triage=false`, { method: 'POST', body: form });
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    data = await res.json();
+  } catch(err) {
+    status.textContent = `Error: ${err.message}`;
+    status.className = 'error';
+    runBtn.disabled = false;
+    return;
+  }
+
+  const img = new Image();
+  img.onload = () => {
+    canvas.width  = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    ctx.drawImage(img, 0, 0);
+
+    data.faces.forEach((face, i) => {
+      const [x, y, w, h] = face.rect;
+      const color = COLORS[i % COLORS.length];
+      const lineW = Math.max(2, Math.round(img.naturalWidth / 300));
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lineW;
+      ctx.strokeRect(x, y, w, h);
+
+      const label = `#${i+1}  ${(face.confidence * 100).toFixed(0)}%`;
+      const fs = Math.max(14, Math.round(img.naturalWidth / 40));
+      ctx.font = `bold ${fs}px sans-serif`;
+      const tw = ctx.measureText(label).width;
+      ctx.fillStyle = color;
+      ctx.fillRect(x, y - fs - 6, tw + 12, fs + 8);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(label, x + 6, y - 5);
+    });
+
+    badge.textContent = `${data.count} face${data.count !== 1 ? 's' : ''} detected`;
+    faceList.innerHTML = data.faces.map((f, i) => {
+      const [x, y, w, h] = f.rect;
+      return `<div class="face-chip">#${i+1} &nbsp;<strong>${(f.confidence*100).toFixed(0)}%</strong> &nbsp;${w}×${h}px</div>`;
+    }).join('');
+
+    resultWrap.style.display = 'block';
+    status.textContent = `Done in ${data.faces.length > 0 ? 'YOLOv8' : 'Haar'} mode`;
+    status.className = '';
+    runBtn.disabled = false;
+  };
+  img.src = URL.createObjectURL(selectedFile);
+});
+</script>
+</body>
+</html>

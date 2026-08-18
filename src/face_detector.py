@@ -41,12 +41,13 @@ class FaceDetector:
         except Exception as e:
             logger.error("YOLO initialization failed: %s", e)
             self._error_handler.handle_face_detection_error(e)
-        try:
-            self._init_haar(cascade_path)
-            self.haar_initialized = True
-        except Exception as e:
-            logger.error("Haar Cascade initialization failed: %s", e)
-            self._error_handler.handle_face_detection_error(e)
+        if not self.yolo_initialized:
+            try:
+                self._init_haar(cascade_path)
+                self.haar_initialized = True
+            except Exception as e:
+                logger.error("Haar Cascade initialization failed: %s", e)
+                self._error_handler.handle_face_detection_error(e)
         if not self.yolo_initialized and not self.haar_initialized:
             raise RuntimeError("All face detection methods failed to initialize")
         self.confidence_threshold = confidence_threshold

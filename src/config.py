@@ -19,7 +19,7 @@ MIN_NEIGHBORS = 4
 MIN_SIZE = (30, 30)
 
 # YOLO face detection
-YOLO_MODEL_NAME = "yolov8n-face.pt"
+YOLO_MODEL_NAME = os.path.join(os.path.dirname(__file__), '..', 'yolov8n-face.pt')
 YOLO_CONFIDENCE_THRESHOLD = 0.5
 
 # Haar Cascade

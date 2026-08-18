@@ -16,7 +16,8 @@ import time
 import cv2
 import numpy as np
 from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 
 from face_detector import FaceDetector
@@ -52,6 +53,9 @@ app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 configure_structlog()
 _instrumentator = build_instrumentator()
 _instrumentator.instrument(app).expose(app)
+
+_static_dir = os.path.join(os.path.dirname(__file__), "static")
+app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
 MAX_CONCURRENT_DETECTIONS = int(os.environ.get("MAX_CONCURRENT_DETECTIONS", "10"))
 # Plain integer counter — no asyncio.Semaphore needed for non-blocking backpressure.
@@ -94,10 +98,15 @@ def get_detector() -> FaceDetector:
 
 def _serialize(face: dict) -> dict:
     return {
-        "rect": list(face["rect"]),
-        "center": list(face["center"]),
+        "rect": [int(v) for v in face["rect"]],
+        "center": [int(v) for v in face["center"]],
         "confidence": round(float(face["confidence"]), 4),
     }
+
+
+@app.get("/", include_in_schema=False)
+def index():
+    return FileResponse(os.path.join(_static_dir, "index.html"))
 
 
 @app.get("/health")
